@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-D0STZF3Y83"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-D0STZF3Y83');
+    </script>
+    <!-- Google AdSense -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8220301553396805"
+         crossorigin="anonymous"></script>
+    <meta charset="UTF-8">
+    <meta name="google-adsense-account" content="ca-pub-8220301553396805">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GameGrip — Gaming Incident Intelligence</title>
+    <meta name="description" content="Real-time gaming friction detection. What's breaking players RIGHT NOW.">
+    <meta name="keywords" content="gaming incident intelligence, game crash tracker, real-time game issues, game friction detection, gaming API, game bug tracker, player stress index, game crash fix, GameGrip dashboard, Grip Protocol, gaming analytics, game status tracker, live game issues">
+    <meta property="og:title" content="GameGrip — Gaming Incident Intelligence Dashboard">
+    <meta property="og:description" content="Real-time gaming friction detection. Track what's breaking players RIGHT NOW across 55+ games with live hotspot data and developer API.">
+    <meta property="og:url" content="https://api.gamegrip.cloud/v3/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="GameGrip">
+    <meta property="og:image" content="https://api.gamegrip.cloud/og-image.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="GameGrip — Gaming Incident Intelligence Dashboard">
+    <meta name="twitter:description" content="Real-time gaming friction detection. Track what's breaking players RIGHT NOW across 55+ games with live hotspot data and developer API.">
+    <link rel="canonical" href="https://api.gamegrip.cloud/v3/">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --bg: #06060c;
+            --card-bg: #0c0c18;
+            --card-border: #1a1a2e;
+            --text: #e8e8f0;
+            --text-dim: #6b6b8a;
+            --red: #ff4d4d;
+            --orange: #ff9100;
+            --green: #00d084;
+            --blue: #4dabf7;
+            --purple: #845ef7;
+        }
+        
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        /* Scanline overlay */
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+            pointer-events: none;
+            z-index: 9999;
+        }
+        
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+        
+        /* Nav */
+        nav {
+            position: fixed; top: 0; left: 0; right: 0;
+            background: rgba(6,6,12,0.85);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--card-border);
+            z-index: 100;
+            padding: 16px 0;
+        }
+        nav .container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+        .logo-icon {
+            width: 40px; height: 40px;
+            background: linear-gradient(135deg, var(--red), var(--orange));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 18px;
+        }
+        .logo-text {
+            font-weight: 800;
+            font-size: 20px;
+            color: var(--text);
+        }
+        .logo-sub {
+            font-size: 10px;
+            letter-spacing: 3px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+        .nav-links { display: flex; gap: 8px; align-items: center; }
+        .nav-links a {
+            color: var(--text-dim);
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+        .nav-links .live-btn {
+            background: rgba(255,77,77,0.15);
+            color: var(--red);
+            border: 1px solid rgba(255,77,77,0.3);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .nav-links .live-btn::before {
+            content: '';
+            width: 8px; height: 8px;
+            background: var(--red);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        
+        /* Hero */
+        .hero {
+            padding: 140px 0 80px;
+            text-align: center;
+            position: relative;
+        }
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 60px; left: 50%;
+            transform: translateX(-50%);
+            width: 600px; height: 600px;
+            background: radial-gradient(circle, rgba(255,77,77,0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,77,77,0.1);
+            border: 1px solid rgba(255,77,77,0.2);
+            padding: 6px 16px;
+            border-radius: 100px;
+            font-size: 13px;
+            color: var(--red);
+            font-weight: 600;
+            margin-bottom: 24px;
+        }
+        .hero h1 {
+            font-size: clamp(40px, 7vw, 72px);
+            font-weight: 900;
+            line-height: 1.05;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, var(--text) 0%, var(--text-dim) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .hero h1 span {
+            background: linear-gradient(135deg, var(--red), var(--orange));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .hero p {
+            font-size: 18px;
+            color: var(--text-dim);
+            max-width: 580px;
+            margin: 0 auto 40px;
+            line-height: 1.6;
+        }
+        .hero-cta {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 14px 28px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+            font-family: inherit;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--red), var(--orange));
+            color: white;
+            box-shadow: 0 4px 20px rgba(255,77,77,0.3);
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 30px rgba(255,77,77,0.4); }
+        .btn-ghost {
+            background: rgba(255,255,255,0.05);
+            color: var(--text);
+            border: 1px solid var(--card-border);
+        }
+        .btn-ghost:hover { background: rgba(255,255,255,0.08); }
+        
+        /* Live stats bar */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin: 60px 0;
+        }
+        .stat-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 24px;
+            text-align: left;
+        }
+        .stat-label { font-size: 11px; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 8px; }
+        .stat-value { font-size: 32px; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
+        .stat-change { font-size: 13px; color: var(--green); margin-top: 4px; }
+        .stat-change.red { color: var(--red); }
+        
+        /* API Demo */
+        .api-demo {
+            margin: 80px 0;
+        }
+        .section-header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+        .section-header h2 {
+            font-size: 36px;
+            font-weight: 800;
+            margin-bottom: 12px;
+        }
+        .section-header p { color: var(--text-dim); font-size: 16px; }
+        
+        .endpoint-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        .endpoint-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            overflow: hidden;
+            transition: border-color 0.2s;
+        }
+        .endpoint-card:hover { border-color: rgba(255,77,77,0.3); }
+        .endpoint-header {
+            padding: 20px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid var(--card-border);
+        }
+        .method-badge {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .method-get { background: rgba(0,208,132,0.15); color: var(--green); }
+        .method-post { background: rgba(77,171,247,0.15); color: var(--blue); }
+        .endpoint-path {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .endpoint-body {
+            padding: 20px 24px;
+        }
+        .endpoint-desc {
+            font-size: 14px;
+            color: var(--text-dim);
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+        .code-block {
+            background: #060610;
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            color: var(--text-dim);
+            overflow-x: auto;
+            white-space: pre;
+        }
+        .code-block .key { color: var(--blue); }
+        .code-block .string { color: var(--green); }
+        .code-block .number { color: var(--orange); }
+        .code-block .bool { color: var(--purple); }
+        
+        /* Try it */
+        .try-section {
+            margin: 80px 0;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 48px;
+        }
+        .try-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 16px;
+            margin-top: 32px;
+            align-items: end;
+        }
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        .form-group select, .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--bg);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            color: var(--text);
+            font-size: 14px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .form-group select:focus, .form-group input:focus { border-color: var(--red); }
+        
+        .try-result {
+            margin-top: 24px;
+            display: none;
+        }
+        .try-result.active { display: block; }
+        
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--card-border);
+            padding: 40px 0;
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 14px;
+        }
+        footer a { color: var(--text-dim); text-decoration: none; }
+        footer a:hover { color: var(--text); }
+        .footer-links { display: flex; gap: 24px; justify-content: center; margin-bottom: 16px; }
+        
+        @media (max-width: 768px) {
+            .try-form { grid-template-columns: 1fr; }
+            .endpoint-grid { grid-template-columns: 1fr; }
+            .hero { padding: 120px 0 60px; }
+        }
+    </style>
+</head>
+<body><div style="position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(135deg,#1a1a2e,#16213e);border-bottom:2px solid #ff9100;padding:0.6rem 1.5rem;display:flex;justify-content:space-between;align-items:center;font-family:system-ui,sans-serif;font-size:0.85rem;color:#e8e8f0;"><span>📦 <strong>Legacy v0.3</strong> — You're viewing an archived version</span><a href="/" style="color:#4dabf7;text-decoration:none;font-weight:600;padding:0.3rem 0.8rem;border:1px solid #4dabf7;border-radius:6px;font-size:0.78rem;">← Go to v0.4d</a></div><div style="height:44px;"></div>
+    <nav>
+        <div class="container">
+            <a href="/v3/" class="logo">
+                <div class="logo-icon">G</div>
+                <div>
+                    <div class="logo-text">GameGrip</div>
+                    <div class="logo-sub">Powered by Grip Protocol</div>
+                </div>
+            </a>
+            <div class="nav-links">
+                <a href="/v3/live.html" class="live-btn">Live</a>
+                <a href="/v3/docs.html">Docs</a>
+                <a href="/v1/status">API</a>
+            </div>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <div class="container">
+            <div class="hero-badge">🔥 v0.3 — PSI Engine Live</div>
+            <h1>What's <span>Breaking Players</span><br>Right Now</h1>
+            <p>Real-time friction detection across PC, console, and handheld platforms. Player Stress Index calculated from severity, trend velocity, and affected population.</p>
+            <div class="hero-cta">
+                <a href="/v3/live.html" class="btn btn-primary">🔥 Live Telemetry</a>
+                <a href="/v3/docs.html" class="btn btn-ghost">API Docs →</a>
+            </div>
+        </div>
+    </section>
+
+    <section class="container">
+        <div class="stats-bar" id="statsBar">
+            <div class="stat-card">
+                <div class="stat-label">Active Incidents</div>
+                <div class="stat-value" id="statIncidents">—</div>
+                <div class="stat-change">Loading...</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Avg Player Stress Index</div>
+                <div class="stat-value" id="statPSI">—</div>
+                <div class="stat-change red">0-100 scale</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Games Monitored</div>
+                <div class="stat-value">10</div>
+                <div class="stat-change">+2 this week</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Devices Supported</div>
+                <div class="stat-value">8</div>
+                <div class="stat-change">Handhelds + PC</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="api-demo container" id="endpoints">
+        <div class="section-header">
+            <h2>API Endpoints</h2>
+            <p>Seven endpoints. Real data. Zero fluff.</p>
+        </div>
+        <div class="endpoint-grid">
+            <div class="endpoint-card">
+                <div class="endpoint-header">
+                    <span class="method-badge method-get">GET</span>
+                    <span class="endpoint-path">/v1/live/hotspots</span>
+                </div>
+                <div class="endpoint-body">
+                    <div class="endpoint-desc">Active friction hotspots ranked by PSI. What's melting players right now.</div>
+                    <div class="code-block">{
+  <span class="key">"game_name"</span>: <span class="string">"Elden Ring"</span>,
+  <span class="key">"category"</span>: <span class="string">"difficulty_spike"</span>,
+  <span class="key">"psi"</span>: <span class="number">100.0</span>,
+  <span class="key">"heat_level"</span>: <span class="string">"🔥 Meltdown"</span>,
+  <span class="key">"verified_fix"</span>: <span class="bool">true</span>,
+  <span class="key">"players_affected"</span>: <span class="number">8500</span>
+}</div>
+                </div>
+            </div>
+            <div class="endpoint-card">
+                <div class="endpoint-header">
+                    <span class="method-badge method-post">POST</span>
+                    <span class="endpoint-path">/v1/friction/scan</span>
+                </div>
+                <div class="endpoint-body">
+                    <div class="endpoint-desc">Analyze a player-reported issue. Returns friction score, category, and fixes.</div>
+                    <div class="code-block">{
+  <span class="key">"friction_score"</span>: <span class="number">7.8</span>,
+  <span class="key">"category"</span>: <span class="string">"performance"</span>,
+  <span class="key">"probable_causes"</span>: [
+    <span class="string">"VRAM allocation"</span>,
+    <span class="string">"Thermal throttling"</span>
+  ],
+  <span class="key">"psi"</span>: <span class="number">42.9</span>
+}</div>
+                </div>
+            </div>
+            <div class="endpoint-card">
+                <div class="endpoint-header">
+                    <span class="method-badge method-post">POST</span>
+                    <span class="endpoint-path">/v1/solve</span>
+                </div>
+                <div class="endpoint-body">
+                    <div class="endpoint-desc">Match problems to verified community solutions with time estimates.</div>
+                    <div class="code-block">{
+  <span class="key">"fixes"</span>: [{
+    <span class="key">"title"</span>: <span class="string">"Bloodhound Step Dodge"</span>,
+    <span class="key">"verified"</span>: <span class="bool">true</span>,
+    <span class="key">"time_to_solution"</span>: <span class="string">"12m 0s"</span>
+  }],
+  <span class="key">"psi_impact"</span>: <span class="number">42.2</span>
+}</div>
+                </div>
+            </div>
+            <div class="endpoint-card">
+                <div class="endpoint-header">
+                    <span class="method-badge method-post">POST</span>
+                    <span class="endpoint-path">/v1/device/optimize</span>
+                </div>
+                <div class="endpoint-body">
+                    <div class="endpoint-desc">Handheld optimization engine. TDP, FPS, upscaling — tuned per game.</div>
+                    <div class="code-block">{
+  <span class="key">"fps_cap"</span>: <span class="number">30</span>,
+  <span class="key">"tdp"</span>: <span class="number">13</span>,
+  <span class="key">"estimated_battery"</span>: <span class="string">"2h 18m"</span>,
+  <span class="key">"settings"</span>: [
+    {<span class="key">"setting"</span>: <span class="string">"Upscaling"</span>, <span class="key">"value"</span>: <span class="string">"FSR 2.1 Balanced"</span>}
+  ]
+}</div>
+                </div>
+            </div>
+            <div class="endpoint-card">
+                <div class="endpoint-header">
+                    <span class="method-badge method-post">POST</span>
+                    <span class="endpoint-path">/v1/events/ingest</span>
+                </div>
+                <div class="endpoint-body">
+                    <div class="endpoint-desc">Ingest telemetry events from any source — Reddit, Twitter, Discord, in-game.</div>
+                    <div class="code-block">{
+  <span class="key">"event_id"</span>: <span class="string">"evt_a1b2c3..."</span>,
+  <span class="key">"status"</span>: <span class="string">"ingested"</span>,
+  <span class="key">"signal_score"</span>: <span class="number">9.42</span>,
+  <span class="key">"psi_contribution"</span>: <span class="number">55.0</span>,
+  <span class="key">"hotspot_created"</span>: <span class="bool">true</span>
+}</div>
+                </div>
+            </div>
+            <div class="endpoint-card">
+                <div class="endpoint-header">
+                    <span class="method-badge method-get">GET</span>
+                    <span class="endpoint-path">/v1/status</span>
+                </div>
+                <div class="endpoint-body">
+                    <div class="endpoint-desc">System health check. Version, uptime, active incidents, average PSI.</div>
+                    <div class="code-block">{
+  <span class="key">"status"</span>: <span class="string">"gripping"</span>,
+  <span class="key">"version"</span>: <span class="string">"0.3.0"</span>,
+  <span class="key">"active_incidents"</span>: <span class="number">10</span>,
+  <span class="key">"avg_psi"</span>: <span class="number">98.1</span>
+}</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Try It Section -->
+    <section class="container">
+        <div class="try-section">
+            <div class="section-header" style="margin-bottom: 0;">
+                <h2>⚡ Try It Live</h2>
+                <p>Hit the API right now. Real responses, no mocks.</p>
+            </div>
+            <div class="try-form">
+                <div class="form-group">
+                    <label>Game</label>
+                    <select id="tryGame">
+                        <option value="Elden Ring">Elden Ring</option>
+                        <option value="Helldivers 2">Helldivers 2</option>
+                        <option value="Fortnite">Fortnite</option>
+                        <option value="Cyberpunk 2077">Cyberpunk 2077</option>
+                        <option value="Minecraft">Minecraft</option>
+                        <option value="Baldurs Gate 3">Baldur's Gate 3</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Issue</label>
+                    <input type="text" id="tryIssue" placeholder="fps drops in boss fights..." value="fps drops during boss fights">
+                </div>
+                <button class="btn btn-primary" id="tryScan" onclick="runScan()">Scan →</button>
+            </div>
+            <div class="try-result" id="tryResult">
+                <div class="code-block" id="tryOutput" style="margin-top: 16px;"></div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <div class="footer-links">
+                <a href="/v3/live.html">Live</a>
+                <a href="/v3/docs.html">Docs</a>
+                <a href="/v1/status">API Status</a>
+                <a href="https://gamegrip.cloud">GameGrip</a>
+            </div>
+            <p>GameGrip — Gaming Incident Intelligence</p>
+            <p style="font-size:11px;color:rgba(107,107,138,0.5);margin-top:6px">Powered by Grip Protocol v0.3</p>
+        </div>
+    </footer>
+
+    <script>
+        // Load live stats
+        async function loadStats() {
+            try {
+                const res = await fetch('/v1/status');
+                const data = await res.json();
+                document.getElementById('statIncidents').textContent = data.active_incidents;
+                document.getElementById('statPSI').textContent = data.avg_psi;
+            } catch(e) {
+                document.getElementById('statIncidents').textContent = '10';
+                document.getElementById('statPSI').textContent = '98.1';
+            }
+        }
+        loadStats();
+        setInterval(loadStats, 60000);
+
+        // Try it live
+        async function runScan() {
+            const game = document.getElementById('tryGame').value;
+            const issue = document.getElementById('tryIssue').value;
+            const btn = document.getElementById('tryScan');
+            const result = document.getElementById('tryResult');
+            const output = document.getElementById('tryOutput');
+            
+            btn.textContent = 'Scanning...';
+            btn.disabled = true;
+            
+            try {
+                const res = await fetch('/v1/friction/scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ game, platform: 'pc', issue })
+                });
+                const data = await res.json();
+                output.textContent = JSON.stringify(data, null, 2);
+                result.classList.add('active');
+            } catch(e) {
+                output.textContent = 'Error: ' + e.message;
+                result.classList.add('active');
+            }
+            
+            btn.textContent = 'Scan →';
+            btn.disabled = false;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /v1/
+Disallow: /health
+
+Sitemap: https://api.gamegrip.cloud/sitemap.xml

@@ -1,0 +1,2387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Primary SEO -->
+    <title>Grip Protocol — Real-Time Game Crash Tracker | GameGrip</title>
+    <meta name="description" content="Track game crashes, bugs, and performance issues in real time. Live hotspots across 55+ games — Elden Ring, Helldivers 2, Fortnite & more. Free developer API.">
+    <meta name="keywords" content="game crash tracker, game performance monitor, gaming issues today, game bug tracker, Steam Deck performance, gaming API, game server status, game crash fix, Grip Protocol, GameGrip, real time game issues, player friction, game incident tracker, gaming dashboard, game health monitor">
+    <meta name="author" content="GameGrip">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://api.gamegrip.cloud/">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://api.gamegrip.cloud/">
+    <meta property="og:title" content="Game Crash Tracker — Live Gaming Issues, Bugs & Fixes | Grip Protocol">
+    <meta property="og:description" content="What's breaking gamers RIGHT NOW? Live crash tracking, performance monitoring, and community-verified fixes for 55+ games. Free developer API.">
+    <meta property="og:image" content="https://api.gamegrip.cloud/og-image.png">
+    <meta property="og:site_name" content="GameGrip">
+    <meta property="og:locale" content="en_GB">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Game Crash Tracker — Live Issues, Bugs & Fixes | Grip Protocol">
+    <meta name="twitter:description" content="What's breaking gamers RIGHT NOW? Real-time crash tracking & fixes for Elden Ring, Helldivers 2, Fortnite, and 50+ more games.">
+    <meta name="twitter:image" content="https://api.gamegrip.cloud/og-image.png">
+
+    <!-- Performance hints -->
+    <link rel="dns-prefetch" href="https://www.googletagmanager.com">
+    <!-- AdSense removed — no ads for now -->
+    <!-- <link rel="dns-prefetch" href="https://pagead2.googlesyndication.com"> -->
+    <link rel="preconnect" href="https://www.googletagmanager.com" crossorigin>
+
+    <!-- Google Analytics — loads only after cookie consent -->
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      function loadGA() {
+        if (document.querySelector('script[src*="googletagmanager"]')) return;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=G-D0STZF3Y83';
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', 'G-D0STZF3Y83');
+      }
+      // Auto-load if user already consented
+      if (localStorage.getItem('cookie_consent') === 'accepted') { loadGA(); }
+    </script>
+    <!-- AdSense removed — no ads for now -->
+    <!-- <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8220301553396805" crossorigin="anonymous"></script> -->
+    <!-- <meta name="google-adsense-account" content="ca-pub-8220301553396805"> -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+    <style>
+        :root {
+            --bg: #0B0E17;
+            --card-bg: #17171c;
+            --card-border: #2a2a33;
+            --text-primary: #e8e8f0;
+            --text-secondary: #6b6b80;
+            --accent-red: #00d4ff;
+            --accent-orange: #FFD700;
+            --accent-yellow: #FFD700;
+            --accent-green: #00D26A;
+            --accent-blue: #7EC8E3;
+            --accent-purple: #bf5fff;
+            --grid-color: rgba(77, 171, 247, 0.03);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0, 212, 255, 0.4); }
+            50% { opacity: 0.7; box-shadow: 0 0 0 8px rgba(0, 212, 255, 0); }
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        @keyframes gridMove {
+            0% { background-position: 0 0; }
+            100% { background-position: 50px 50px; }
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes ticker {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: 
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: gridMove 20s linear infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .scanlines {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: repeating-linear-gradient(
+                0deg, transparent, transparent 2px,
+                rgba(0, 0, 0, 0.03) 2px, rgba(0, 0, 0, 0.03) 4px
+            );
+            pointer-events: none;
+            z-index: 1;
+        }
+        .telemetry-layer {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+        .telemetry-dot {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--accent-blue);
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: float 6s ease-in-out infinite;
+        }
+        .container {
+            position: relative;
+            z-index: 2;
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .header {
+            margin-bottom: 2.5rem;
+            animation: fadeInUp 0.6s ease-out;
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .brand-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent-red), var(--accent-purple));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: 900;
+        }
+        .brand-text h1 {
+            font-size: 1.1rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+        }
+        .brand-text span {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        .live-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(0, 212, 255, 0.1);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--accent-red);
+        }
+        .live-pulse {
+            width: 8px;
+            height: 8px;
+            background: var(--accent-red);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        .version-badge {
+            display: inline-block;
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--accent-green);
+            background: rgba(0, 208, 132, 0.1);
+            border: 1px solid rgba(0, 208, 132, 0.2);
+            padding: 0.3rem 0.7rem;
+            border-radius: 4px;
+            margin-left: 0.5rem;
+        }
+        .headline {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 900;
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+            background: linear-gradient(135deg, #fff 0%, var(--accent-red) 50%, var(--accent-purple) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.75rem;
+        }
+        .subhead {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            line-height: 1.5;
+        }
+        .api-key-bar {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .api-key-input {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            color: var(--text-primary);
+            font-family: monospace;
+            font-size: 0.9rem;
+            min-width: 300px;
+            flex: 1;
+        }
+        .api-key-input::placeholder {
+            color: var(--text-secondary);
+        }
+        .api-key-btn {
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-red));
+            border: none;
+            border-radius: 8px;
+            padding: 0.75rem 1.5rem;
+            color: #fff;
+            font-weight: 700;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
+        .api-key-btn:hover {
+            opacity: 0.9;
+        }
+        .auth-status {
+            font-size: 0.8rem;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+        .auth-ok {
+            background: rgba(0, 208, 132, 0.1);
+            color: var(--accent-green);
+            border: 1px solid rgba(0, 208, 132, 0.2);
+        }
+        .auth-missing {
+            background: rgba(255, 215, 0, 0.1);
+            color: var(--accent-orange);
+            border: 1px solid rgba(255, 215, 0, 0.2);
+        }
+        .metrics-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+            animation: fadeInUp 0.7s ease-out;
+        }
+        .metric-card {
+            background: linear-gradient(145deg, var(--card-bg) 0%, rgba(23,23,28,0.8) 100%);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            position: relative;
+            overflow: hidden;
+        }
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--accent-red), var(--accent-purple));
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .metric-card:hover::before { opacity: 1; }
+        .metric-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+        .metric-value {
+            font-size: 1.75rem;
+            font-weight: 900;
+            color: var(--text-primary);
+        }
+        .metric-delta {
+            font-size: 0.8rem;
+            margin-top: 0.25rem;
+            font-weight: 600;
+        }
+        .metric-delta.up { color: var(--accent-red); }
+        .metric-delta.down { color: var(--accent-green); }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+        .card {
+            background: linear-gradient(145deg, var(--card-bg) 0%, rgba(23,23,28,0.6) 100%);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: fadeInUp 0.6s ease-out backwards;
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent-red), var(--accent-purple));
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(0, 212, 255, 0.15);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 212, 255, 0.1);
+        }
+        .card:hover::before { opacity: 1; }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+        }
+        .game-info { flex: 1; }
+        .game-name {
+            font-size: 1.3rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 0.35rem;
+            letter-spacing: -0.01em;
+        }
+        .platform-tag {
+            display: inline-block;
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--accent-blue);
+            background: rgba(77, 171, 247, 0.1);
+            border: 1px solid rgba(77, 171, 247, 0.2);
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+        }
+        .category-tag {
+            display: inline-block;
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--accent-orange);
+            background: rgba(255, 215, 0, 0.1);
+            border: 1px solid rgba(255, 215, 0, 0.2);
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            margin-left: 0.4rem;
+        }
+        .heat-badge {
+            font-size: 0.8rem;
+            font-weight: 800;
+            padding: 0.4rem 0.8rem;
+            border-radius: 8px;
+            white-space: nowrap;
+        }
+        .heat-meltdown {
+            background: rgba(0, 212, 255, 0.12);
+            color: var(--accent-red);
+            border: 1px solid rgba(0, 212, 255, 0.25);
+            animation: pulse 3s infinite;
+        }
+        .heat-escalating {
+            background: rgba(255, 215, 0, 0.12);
+            color: var(--accent-orange);
+            border: 1px solid rgba(255, 215, 0, 0.25);
+        }
+        .heat-elevated {
+            background: rgba(255, 215, 0, 0.1);
+            color: var(--accent-yellow);
+            border: 1px solid rgba(255, 215, 0, 0.2);
+        }
+        .heat-stabilizing {
+            background: rgba(0, 208, 132, 0.1);
+            color: var(--accent-green);
+            border: 1px solid rgba(0, 208, 132, 0.2);
+        }
+        .summary {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            margin-bottom: 1.25rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--card-border);
+        }
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .stat { text-align: center; }
+        .stat-value {
+            font-size: 1.4rem;
+            font-weight: 900;
+            color: #fff;
+            line-height: 1;
+            margin-bottom: 0.25rem;
+        }
+        .stat-value.trend-up { color: var(--accent-red); }
+        .stat-value.trend-down { color: var(--accent-green); }
+        .stat-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-secondary);
+        }
+        .psi-bar { margin-bottom: 1rem; }
+        .psi-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.4rem;
+        }
+        .psi-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+        }
+        .psi-value {
+            font-size: 0.9rem;
+            font-weight: 900;
+            color: var(--accent-red);
+        }
+        .psi-track {
+            height: 4px;
+            background: var(--card-border);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .psi-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 1s ease-out, background 0.5s;
+        }
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .fix-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.8rem;
+            font-weight: 700;
+            padding: 0.4rem 0.75rem;
+            border-radius: 6px;
+        }
+        .fix-available {
+            background: rgba(0, 208, 132, 0.1);
+            color: var(--accent-green);
+            border: 1px solid rgba(0, 208, 132, 0.2);
+        }
+        .fix-unavailable {
+            background: rgba(0, 212, 255, 0.1);
+            color: var(--accent-red);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+        }
+        .tts {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        .tts strong {
+            color: var(--accent-orange);
+            font-weight: 800;
+        }
+        .severity-movement {
+            font-size: 0.75rem;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.2rem;
+        }
+        .movement-climbing { color: var(--accent-red); }
+        .movement-dropping { color: var(--accent-green); }
+        .movement-stable { color: var(--text-secondary); }
+        .footer {
+            text-align: center;
+            padding: 2rem 0;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            letter-spacing: 0.05em;
+            border-top: 1px solid var(--card-border);
+            margin-top: 2rem;
+        }
+        .footer a {
+            color: var(--accent-blue);
+            text-decoration: none;
+        }
+        .state-message {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+        .state-message.error {
+            color: var(--accent-red);
+        }
+        .state-message h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+        .ticker-wrap {
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--card-border);
+            overflow: hidden;
+            white-space: nowrap;
+            padding: 0.5rem 0;
+            margin-bottom: 2rem;
+        }
+        .ticker {
+            display: inline-block;
+            animation: ticker 30s linear infinite;
+        }
+        .ticker-item {
+            display: inline-block;
+            padding: 0 2rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        .ticker-item .ticker-game {
+            color: var(--text-primary);
+            font-weight: 800;
+        }
+        .ticker-item .ticker-alert {
+            color: var(--accent-red);
+        }
+        /* ===== NAV BAR ===== */
+        .nav-bar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(8, 8, 15, 0.92);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--card-border);
+            padding: 0 2rem;
+        }
+        .nav-inner {
+            max-width: 1440px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 52px;
+        }
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+            color: var(--text-primary);
+            z-index: 120;
+        }
+        .nav-brand-icon {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, var(--accent-red), var(--accent-purple));
+            border-radius: 7px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            font-weight: 900;
+            color: white;
+        }
+        .nav-brand-text {
+            font-size: 0.9rem;
+            font-weight: 800;
+            letter-spacing: -0.01em;
+        }
+
+        /* Hamburger toggle */
+        .nav-toggle {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 5px;
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+            z-index: 120;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+        .nav-toggle span {
+            display: block;
+            width: 22px;
+            height: 2px;
+            background: var(--text-primary);
+            border-radius: 2px;
+            transition: all 0.3s ease;
+            transform-origin: center;
+        }
+        .nav-toggle.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+        .nav-toggle.open span:nth-child(2) { opacity: 0; }
+        .nav-toggle.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+        /* Slide-out drawer */
+        .nav-backdrop {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 105;
+        }
+        .nav-backdrop.open { display: block; }
+
+        .nav-drawer {
+            position: fixed;
+            top: 0;
+            right: -320px;
+            width: 300px;
+            max-width: 85vw;
+            height: 100vh;
+            background: rgba(12, 12, 22, 0.98);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border-left: 1px solid var(--card-border);
+            z-index: 110;
+            transition: right 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            padding: 80px 0 2rem 0;
+            overflow-y: auto;
+        }
+        .nav-drawer.open { right: 0; }
+
+        .nav-links {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 1rem 2rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.92rem;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            border-left: 3px solid transparent;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .nav-link:hover {
+            color: var(--text-primary);
+            background: rgba(255,255,255,0.03);
+        }
+        .nav-link.active {
+            color: var(--accent-red);
+            border-left-color: var(--accent-red);
+            background: rgba(255,77,77,0.05);
+        }
+        .nav-link .nav-icon { margin-right: 0.6rem; font-size: 1.1rem; }
+
+        .nav-divider {
+            height: 1px;
+            background: var(--card-border);
+            margin: 0.75rem 2rem;
+        }
+
+        .nav-contact {
+            margin-top: auto;
+            padding: 1.5rem 2rem;
+            border-top: 1px solid var(--card-border);
+        }
+        .nav-contact p {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin: 0 0 0.6rem 0;
+        }
+        .nav-contact a {
+            color: var(--accent-blue);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .nav-contact a:hover { text-decoration: underline; }
+
+        /* ===== SECTIONS ===== */
+        .section { display: none; }
+        .section.active { display: block; }
+
+        /* ===== GAME REGISTRY ===== */
+        .registry-controls {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+        .registry-search {
+            flex: 1;
+            min-width: 200px;
+            padding: 0.65rem 1rem;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .registry-search:focus { border-color: var(--accent-blue); }
+        .registry-search::placeholder { color: var(--text-secondary); }
+        .registry-filter {
+            padding: 0.65rem 0.9rem;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.82rem;
+            cursor: pointer;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        .registry-filter option { background: var(--card-bg); color: var(--text-primary); }
+        .registry-stats {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+        .registry-stat {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 1rem 1.5rem;
+            flex: 1;
+            min-width: 140px;
+            text-align: center;
+        }
+        .registry-stat-value {
+            font-size: 1.8rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .registry-stat-label {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-top: 0.25rem;
+        }
+        .registry-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1rem;
+        }
+        .game-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 1.2rem;
+            transition: border-color 0.2s, transform 0.15s;
+            cursor: pointer;
+        }
+        .game-card:hover {
+            border-color: var(--accent-blue);
+            transform: translateY(-2px);
+        }
+        .game-card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.6rem;
+        }
+        .game-card-name {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        .game-card-id {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            font-family: 'Courier New', monospace;
+            margin-top: 0.15rem;
+        }
+        .game-card-genre {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-radius: 4px;
+            background: rgba(77, 171, 247, 0.12);
+            color: var(--accent-blue);
+        }
+        .game-card-meta {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin: 0.6rem 0;
+        }
+        .game-card-platform {
+            padding: 0.15rem 0.45rem;
+            font-size: 0.65rem;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 3px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        .game-card-bottom {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 0.8rem;
+            padding-top: 0.6rem;
+            border-top: 1px solid var(--card-border);
+        }
+        .game-card-dev {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        .game-card-status {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+        }
+        .status-active { background: rgba(0, 208, 132, 0.12); color: var(--accent-green); }
+        .status-pending { background: rgba(255, 215, 0, 0.12); color: var(--accent-yellow); }
+        .status-paused { background: rgba(107, 107, 138, 0.12); color: var(--text-secondary); }
+        .registry-empty {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+        .registry-count {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        /* ===== GAME DETAIL MODAL ===== */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 2rem;
+            max-width: 600px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+        }
+        .modal-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        .modal-close:hover { color: var(--text-primary); }
+        .modal h2 { font-size: 1.3rem; margin-bottom: 0.5rem; }
+        .modal-section { margin-top: 1.2rem; }
+        .modal-section h3 {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+        .modal-tags { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+        .modal-tag {
+            padding: 0.25rem 0.6rem;
+            font-size: 0.72rem;
+            font-weight: 600;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.06);
+            color: var(--text-secondary);
+        }
+        .modal-tag.platform { background: rgba(77,171,247,0.1); color: var(--accent-blue); }
+        .modal-tag.friction { background: rgba(255,215,0,0.1); color: var(--accent-orange); }
+        .modal-info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.4rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            font-size: 0.85rem;
+        }
+        .modal-info-label { color: var(--text-secondary); }
+        .modal-info-value { color: var(--text-primary); font-weight: 600; }
+
+        /* ===== DEVELOPER PORTAL ===== */
+        .dev-portal-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-top: 1.5rem;
+        }
+        .dev-panel {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            padding: 2rem;
+        }
+        .dev-panel h3 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .dev-field {
+            margin-bottom: 1rem;
+        }
+        .dev-field label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-secondary);
+            margin-bottom: 0.35rem;
+        }
+        .dev-field input, .dev-field select {
+            width: 100%;
+            padding: 0.65rem 0.9rem;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+        }
+        .dev-field input:focus, .dev-field select:focus { border-color: var(--accent-blue); }
+        .dev-field select option { background: var(--card-bg); }
+        .dev-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.7rem 1.5rem;
+            font-size: 0.88rem;
+            font-weight: 700;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .dev-btn-primary {
+            background: linear-gradient(135deg, var(--accent-red), var(--accent-purple));
+            color: #fff;
+        }
+        .dev-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(255,77,77,0.3); }
+        .dev-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+        .dev-btn-secondary {
+            background: rgba(255,255,255,0.06);
+            color: var(--text-primary);
+            border: 1px solid var(--card-border);
+        }
+        .dev-btn-secondary:hover { border-color: var(--accent-blue); }
+        .dev-result {
+            margin-top: 1.2rem;
+            padding: 1.2rem;
+            background: rgba(0,208,132,0.06);
+            border: 1px solid rgba(0,208,132,0.2);
+            border-radius: 10px;
+            display: none;
+        }
+        .dev-result.visible { display: block; }
+        .dev-result.error {
+            background: rgba(255,77,77,0.06);
+            border-color: rgba(255,77,77,0.2);
+        }
+        .dev-result h4 {
+            font-size: 0.85rem;
+            margin-bottom: 0.75rem;
+            color: var(--accent-green);
+        }
+        .dev-result.error h4 { color: var(--accent-red); }
+        .dev-key-display {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--card-border);
+            border-radius: 6px;
+            padding: 0.7rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.82rem;
+            color: var(--accent-yellow);
+            word-break: break-all;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .dev-key-display .copy-btn {
+            background: rgba(255,255,255,0.08);
+            border: none;
+            border-radius: 4px;
+            color: var(--text-secondary);
+            padding: 0.3rem 0.6rem;
+            font-size: 0.72rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .dev-key-display .copy-btn:hover { color: var(--text-primary); }
+        .dev-info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.4rem 0;
+            font-size: 0.82rem;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .dev-info-label { color: var(--text-secondary); }
+        .dev-info-value { color: var(--text-primary); font-weight: 600; }
+        .dev-warning {
+            font-size: 0.75rem;
+            color: var(--accent-orange);
+            margin-top: 0.75rem;
+            line-height: 1.4;
+        }
+        .dev-tiers {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+        .dev-tier-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 1.2rem;
+            text-align: center;
+            transition: border-color 0.2s;
+        }
+        .dev-tier-card:hover { border-color: var(--accent-blue); }
+        .dev-tier-card.highlight { border-color: var(--accent-green); background: rgba(0,208,132,0.04); }
+        .dev-tier-name {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 0.3rem;
+        }
+        .dev-tier-rate {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.6rem;
+        }
+        .dev-tier-scopes {
+            font-size: 0.7rem;
+            color: var(--accent-blue);
+            line-height: 1.6;
+        }
+        .dev-lookup-result {
+            margin-top: 1.2rem;
+            display: none;
+        }
+        .dev-lookup-result.visible { display: block; }
+
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: 1fr; }
+            .registry-grid { grid-template-columns: 1fr; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .header-top { flex-direction: column; }
+            .api-key-bar { flex-direction: column; align-items: stretch; }
+            .api-key-input { min-width: auto; }
+            .nav-drawer { width: 260px; }
+            .registry-stats { gap: 0.5rem; }
+            .registry-stat { min-width: 80px; padding: 0.75rem; }
+            .registry-stat-value { font-size: 1.3rem; }
+            .dev-portal-grid { grid-template-columns: 1fr; }
+            .dev-tiers { grid-template-columns: 1fr; }
+        }
+    </style>
+
+    <!-- Structured Data: WebSite -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Grip Protocol",
+      "alternateName": ["GameGrip", "Game Crash Tracker", "Gaming Issue Tracker"],
+      "url": "https://api.gamegrip.cloud/",
+      "description": "Real-time game crash tracker and performance monitor. Track crashes, bugs, FPS drops, shader stutter, and server issues across 55+ games including Elden Ring, Helldivers 2, Fortnite, and more.",
+      "publisher": {
+        "@type": "Organization",
+        "name": "GameGrip",
+        "url": "https://gamegrip.cloud",
+        "email": "hello@gamegrip.cloud",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://api.gamegrip.cloud/og-image.png"
+        }
+      },
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://api.gamegrip.cloud/#registry?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+
+    <!-- Structured Data: SoftwareApplication (API) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Grip Protocol API",
+      "applicationCategory": "DeveloperApplication",
+      "applicationSubCategory": "Game Analytics API",
+      "operatingSystem": "Web",
+      "url": "https://api.gamegrip.cloud/",
+      "description": "Game crash tracking and performance monitoring API. Real-time gaming issue data, live hotspots, game registry with 55+ titles, crash reporting, and player friction analytics for studios and developers.",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "GBP",
+        "description": "Free tier — 60 requests per minute, read-only access"
+      },
+      "author": {
+        "@type": "Organization",
+        "name": "GameGrip"
+      }
+    }
+    </script>
+</head>
+<body>
+<!-- Loading Screen -->
+<div id="page-loader">
+  <div class="loader-inner">
+    <div class="loader-ring"></div>
+    <div class="loader-brand">GAME<span>GRIP</span></div>
+  </div>
+</div>
+<style>
+  #page-loader {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: #0B0E17;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.4s ease, visibility 0.4s ease;
+  }
+  #page-loader.fade-out {
+    opacity: 0;
+    visibility: hidden;
+  }
+  .loader-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+  }
+  .loader-ring {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(0, 212, 255, 0.15);
+    border-top-color: #00d4ff;
+    border-radius: 50%;
+    animation: loader-spin 0.8s linear infinite;
+  }
+  @keyframes loader-spin {
+    to { transform: rotate(360deg); }
+  }
+  .loader-brand {
+    font-family: 'Manrope', -apple-system, sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    color: rgba(255, 255, 255, 0.35);
+  }
+  .loader-brand span {
+    color: #00d4ff;
+  }
+</style>
+<script>
+  (function() {
+    var loader = document.getElementById("page-loader");
+    var maxTime = setTimeout(function() { loader.classList.add("fade-out"); }, 3000);
+    window.addEventListener("load", function() {
+      clearTimeout(maxTime);
+      var elapsed = performance.now();
+      var minDelay = Math.max(0, 400 - elapsed);
+      setTimeout(function() { loader.classList.add("fade-out"); }, minDelay);
+    });
+  })();
+</script>
+    <div class="scanlines"></div>
+    <div class="telemetry-layer" id="telemetryLayer"></div>
+
+    <!-- NAVIGATION -->
+    <nav class="nav-bar">
+        <div class="nav-inner">
+            <a class="nav-brand" href="/">
+                <div class="nav-brand-icon">G</div>
+                <span class="nav-brand-text">Grip Protocol</span>
+            </a>
+            <a href="https://sandbox.gamegrip.cloud" target="_blank" style="color:var(--accent-blue);text-decoration:none;font-size:0.85rem;margin-left:1.5rem;">📰 Sandbox</a>
+            <a href="https://auth.gamegrip.cloud" target="_blank" style="color:var(--accent-blue);text-decoration:none;font-size:0.85rem;margin-left:1.5rem;">🔐 Sign In</a>
+            <button class="nav-toggle" id="navToggle" onclick="toggleNav()" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </nav>
+
+    <div class="nav-backdrop" id="navBackdrop" onclick="toggleNav()"></div>
+    <div class="nav-drawer" id="navDrawer">
+        <div class="nav-links">
+            <a class="nav-link active" data-section="hotspots" onclick="switchSection('hotspots');toggleNav();">
+                <span class="nav-icon">🔥</span> Live Hotspots
+            </a>
+            <a class="nav-link" data-section="registry" onclick="switchSection('registry');toggleNav();">
+                <span class="nav-icon">🎮</span> Game Registry
+            </a>
+            <a class="nav-link" data-section="devportal" onclick="switchSection('devportal');toggleNav();">
+                <span class="nav-icon">🔑</span> Get API Key
+            </a>
+            <div class="nav-divider"></div>
+            <a class="nav-link" href="/v3/docs.html">
+                <span class="nav-icon">📖</span> API Docs
+            </a>
+            <a class="nav-link" href="/v3/protocol.html">
+                <span class="nav-icon">⚙️</span> Protocol
+            </a>
+            <div class="nav-divider"></div>
+            <a class="nav-link" href="https://jaffaai.cc" target="_blank">
+                <span class="nav-icon">🍊</span> jaffaAi Agent ↗
+            </a>
+            <a class="nav-link" href="https://gamegrip.cloud" target="_blank">
+                <span class="nav-icon">🌐</span> GameGrip ↗
+            </a>
+            <a class="nav-link" href="https://discord.gg/wPgPNKvgw" target="_blank">
+                <span class="nav-icon">💬</span> Discord ↗
+            </a>
+            <div class="nav-divider"></div>
+            <a class="nav-link" href="https://auth.gamegrip.cloud" target="_blank">
+                <span class="nav-icon">🔐</span> Sign In ↗
+            </a>
+        </div>
+        <div class="nav-contact">
+            <p>Want more information or interested in working with us?</p>
+            <p>Drop Sean an email:<br><a href="mailto:hello@gamegrip.cloud">hello@gamegrip.cloud</a></p>
+            <p style="margin-top:0.8rem;">A <a href="https://sewell.ink" style="color:var(--accent-orange);">Sewell.ink</a> brand</p>
+        </div>
+    </div>
+
+    <main class="container" role="main">
+
+        <!-- ===== HOTSPOTS SECTION (default) ===== -->
+        <div class="section active" id="section-hotspots">
+        <div class="header">
+            <div class="header-top">
+                <div class="brand">
+                    <div class="brand-icon">G</div>
+                    <div class="brand-text">
+                        <h1>Grip Protocol</h1>
+                        <span>Real-time game issue tracking</span>
+                    </div>
+                </div>
+                <div class="live-badge">
+                    <div class="live-pulse"></div>
+                    <span>LIVE</span>
+                </div>
+            </div>
+            <h2 class="headline">🔥 What's Breaking Players RIGHT NOW</h2>
+            <p style="color:var(--text-secondary);font-size:0.85rem;margin-top:-0.3rem;margin-bottom:1rem;">Real-time game crash tracker &amp; performance monitor — live issues across 55+ games</p>
+            <p class="subhead">
+                Crashes, bugs, FPS drops, server outages — tracked across 55+ games so you don't have to guess.
+            </p>
+        </div>
+
+        <div class="api-key-bar">
+            <input type="text" class="api-key-input" id="apiKeyInput" placeholder="Got an API key? Paste it here — or just browse, no key needed">
+            <button class="api-key-btn" onclick="setApiKey()">Connect</button>
+            <div class="auth-status auth-missing" id="authStatus">Browsing freely — get an API key for full access</div>
+        </div>
+
+        <div class="metrics-bar" id="metricsBar">
+            <div class="metric-card">
+                <div class="metric-label">Active Incidents</div>
+                <div class="metric-value" id="metricIncidents">—</div>
+                <div class="metric-delta up" id="metricIncidentsDelta">+0%</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Avg Severity</div>
+                <div class="metric-value" id="metricPSI">—</div>
+                <div class="metric-delta up" id="metricPSIDelta">+0.0</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Verified Fixes Available</div>
+                <div class="metric-value" id="metricFixes">—</div>
+                <div class="metric-delta down" id="metricFixesDelta">—</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Players Affected (24h)</div>
+                <div class="metric-value" id="metricPlayers">—</div>
+                <div class="metric-delta up" id="metricPlayersDelta">+0%</div>
+            </div>
+        </div>
+
+        <div class="ticker-wrap">
+            <div class="ticker" id="ticker"></div>
+        </div>
+
+        <div class="grid" id="grid">
+            <div class="state-message">Loading live data...</div>
+        </div>
+        </div><!-- end section-hotspots -->
+
+        <!-- ===== GAME REGISTRY SECTION ===== -->
+        <div class="section" id="section-registry">
+        <div class="header">
+            <div class="header-top">
+                <div class="brand">
+                    <div class="brand-icon">G</div>
+                    <div class="brand-text">
+                        <h2 style="font-size:inherit;margin:inherit;">Game Registry</h2>
+                        <span>Every game we monitor</span>
+                    </div>
+                </div>
+            </div>
+            <h2 class="headline">🎮 Game Registry</h2>
+            <p style="color:var(--text-secondary);font-size:0.85rem;margin-top:-0.3rem;margin-bottom:1rem;">Browse 55+ tracked games — crash reports, known bugs, performance data &amp; platform support</p>
+            <p class="subhead">
+                Search by title, genre, or platform. We track crashes, bugs, and performance issues for each one.
+            </p>
+        </div>
+
+        <div class="registry-stats" id="registryStats">
+            <div class="registry-stat">
+                <div class="registry-stat-value" id="regStatTotal">—</div>
+                <div class="registry-stat-label">Tracked Games</div>
+            </div>
+            <div class="registry-stat">
+                <div class="registry-stat-value" id="regStatGenres">—</div>
+                <div class="registry-stat-label">Genres</div>
+            </div>
+            <div class="registry-stat">
+                <div class="registry-stat-value" id="regStatPlatforms">—</div>
+                <div class="registry-stat-label">Platforms Covered</div>
+            </div>
+            <div class="registry-stat">
+                <div class="registry-stat-value" id="regStatActive">—</div>
+                <div class="registry-stat-label">Actively Monitored</div>
+            </div>
+        </div>
+
+        <div class="registry-controls">
+            <input type="text" class="registry-search" id="registrySearch" placeholder="Search games... (e.g. Elden Ring, fps, FromSoftware)">
+            <select class="registry-filter" id="registryGenre">
+                <option value="">All Genres</option>
+            </select>
+            <select class="registry-filter" id="registryPlatform">
+                <option value="">All Platforms</option>
+            </select>
+            <select class="registry-filter" id="registryStatus">
+                <option value="">All Status</option>
+                <option value="active">Active</option>
+                <option value="pending">Pending</option>
+                <option value="paused">Paused</option>
+            </select>
+        </div>
+
+        <div class="registry-count" id="registryCount"></div>
+        <div class="registry-grid" id="registryGrid">
+            <div class="registry-empty">Loading game registry...</div>
+        </div>
+        </div><!-- end section-registry -->
+
+        <!-- ===== DEVELOPER PORTAL SECTION ===== -->
+        <div class="section" id="section-devportal">
+        <div class="header">
+            <div class="header-top">
+                <div class="brand">
+                    <div class="brand-icon">G</div>
+                    <div class="brand-text">
+                        <h2 style="font-size:inherit;margin:inherit;">Developer Portal</h2>
+                        <span>Build with our data — it's free</span>
+                    </div>
+                </div>
+            </div>
+            <h2 class="headline">🔑 Get Your API Key</h2>
+            <p style="color:var(--text-secondary);font-size:0.85rem;margin-top:-0.3rem;margin-bottom:1rem;">Free API — pull live game crash data, performance stats &amp; issue reports into your app or stream</p>
+            <p class="subhead">
+                Grab a free API key and start pulling live game issue data into your app, site, or stream overlay.
+            </p>
+        </div>
+
+        <div class="dev-tiers">
+            <div class="dev-tier-card highlight">
+                <div class="dev-tier-name">Free</div>
+                <div class="dev-tier-rate">60 req/min</div>
+                <div class="dev-tier-scopes">read:hotspots</div>
+            </div>
+            <div class="dev-tier-card">
+                <div class="dev-tier-name">Pro</div>
+                <div class="dev-tier-rate">300 req/min</div>
+                <div class="dev-tier-scopes">read:hotspots · read:signals<br>webhooks:manage</div>
+            </div>
+            <div class="dev-tier-card">
+                <div class="dev-tier-name">Enterprise</div>
+                <div class="dev-tier-rate">1000 req/min</div>
+                <div class="dev-tier-scopes">All scopes · Priority support</div>
+            </div>
+        </div>
+
+        <div class="dev-portal-grid">
+
+            <!-- LEFT: Register -->
+            <div class="dev-panel">
+                <h3>📝 Register for API Key</h3>
+                <div class="dev-field">
+                    <label>Email Address *</label>
+                    <input type="email" id="regEmail" placeholder="you@studio.com">
+                </div>
+                <div class="dev-field">
+                    <label>Account Type</label>
+                    <select id="regType">
+                        <option value="creator">Creator (indie dev, content maker)</option>
+                        <option value="studio">Studio (game studio, company)</option>
+                    </select>
+                </div>
+                <div class="dev-field">
+                    <label>Tier</label>
+                    <select id="regTier">
+                        <option value="free">Free — 60 req/min</option>
+                        <option value="pro">Pro — 300 req/min</option>
+                    </select>
+                </div>
+                <button class="dev-btn dev-btn-primary" id="regSubmitBtn" onclick="registerKey()">
+                    🔑 Generate API Key
+                </button>
+
+                <div class="dev-result" id="regResult">
+                    <h4>✅ API Key Generated!</h4>
+                    <div class="dev-key-display">
+                        <span id="regKeyValue"></span>
+                        <button class="copy-btn" onclick="copyKey()">Copy</button>
+                    </div>
+                    <div style="margin-top:0.8rem;">
+                        <div class="dev-info-row"><span class="dev-info-label">Key ID</span><span class="dev-info-value" id="regKeyId"></span></div>
+                        <div class="dev-info-row"><span class="dev-info-label">Type</span><span class="dev-info-value" id="regKeyType"></span></div>
+                        <div class="dev-info-row"><span class="dev-info-label">Tier</span><span class="dev-info-value" id="regKeyTier"></span></div>
+                        <div class="dev-info-row"><span class="dev-info-label">Scopes</span><span class="dev-info-value" id="regKeyScopes"></span></div>
+                    </div>
+                    <div class="dev-warning">
+                        ⚠️ Copy your API key now — it won't be shown again. Store it somewhere safe.
+                    </div>
+                </div>
+
+                <div class="dev-result error" id="regError">
+                    <h4>❌ Registration Failed</h4>
+                    <p id="regErrorMsg" style="font-size:0.85rem;color:var(--text-secondary);"></p>
+                </div>
+            </div>
+
+            <!-- RIGHT: Lookup -->
+            <div class="dev-panel">
+                <h3>🔍 Key Lookup</h3>
+                <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:1rem;">
+                    Already have a key? Paste it below to check your account info, usage, and status.
+                </p>
+                <div class="dev-field">
+                    <label>API Key</label>
+                    <input type="text" id="lookupKey" placeholder="grip_xxxxxxxx...">
+                </div>
+                <button class="dev-btn dev-btn-secondary" onclick="lookupKey()">
+                    Check Key
+                </button>
+
+                <div class="dev-lookup-result" id="lookupResult">
+                    <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:10px;padding:1.2rem;margin-top:0.5rem;">
+                        <div class="dev-info-row"><span class="dev-info-label">Key ID</span><span class="dev-info-value" id="luKeyId"></span></div>
+                        <div class="dev-info-row"><span class="dev-info-label">Email</span><span class="dev-info-value" id="luEmail"></span></div>
+                        <div class="dev-info-row"><span class="dev-info-label">Type</span><span class="dev-info-value" id="luType"></span></div>
+                        <div class="dev-info-row"><span class="dev-info-label">Tier</span><span class="dev-info-value" id="luTier"></span></div>
+                        <div class="dev-info-row"><span class="dev-info-label">Scopes</span><span class="dev-info-value" id="luScopes"></span></div>
+                        <div class="dev-info-row"><span class="dev-info-label">Status</span><span class="dev-info-value" id="luStatus"></span></div>
+                        <div class="dev-info-row"><span class="dev-info-label">Requests Made</span><span class="dev-info-value" id="luRequests"></span></div>
+                        <div class="dev-info-row"><span class="dev-info-label">Last Used</span><span class="dev-info-value" id="luLastUsed"></span></div>
+                        <div class="dev-info-row"><span class="dev-info-label">Created</span><span class="dev-info-value" id="luCreated"></span></div>
+                    </div>
+                </div>
+
+                <div class="dev-result error" id="lookupError" style="display:none;">
+                    <h4>❌ Lookup Failed</h4>
+                    <p id="lookupErrorMsg" style="font-size:0.85rem;color:var(--text-secondary);"></p>
+                </div>
+
+                <div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--card-border);">
+                    <h3 style="font-size:0.9rem;">⚡ Quick Start</h3>
+                    <p style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:0.75rem;">
+                        Once you have your key, make your first API call:
+                    </p>
+                    <div style="background:rgba(0,0,0,0.4);border-radius:8px;padding:1rem;font-family:'Courier New',monospace;font-size:0.75rem;color:var(--accent-green);overflow-x:auto;line-height:1.6;">
+                        <span style="color:var(--text-secondary);"># Get live game issues</span><br>
+                        curl -H "X-API-Key: YOUR_KEY" \<br>
+                        &nbsp;&nbsp;https://api.gamegrip.cloud/v1/live/hotspots<br><br>
+                        <span style="color:var(--text-secondary);"># Search game registry</span><br>
+                        curl -H "X-API-Key: YOUR_KEY" \<br>
+                        &nbsp;&nbsp;https://api.gamegrip.cloud/v1/games?search=elden
+                    </div>
+                    <p style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.75rem;">
+                        Full documentation → <a href="/v3/docs.html" style="color:var(--accent-blue);">API Docs</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+        </div><!-- end section-devportal -->
+
+        <!-- GAME DETAIL MODAL -->
+        <div class="modal-overlay" id="gameModal" onclick="if(event.target===this)closeModal()">
+            <div class="modal">
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+                <div id="modalContent"></div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Grip Protocol — Live game issue tracking by GameGrip</p>
+            <p style="margin-top: 0.5rem; font-size: 0.75rem;">
+                API: <a href="http://localhost:8000/v1/live/hotspots" id="apiLink">localhost:8000</a> · 
+                Data refreshes every 5s · Free API access available
+            </p>
+        </div>
+    </main>
+
+
+<!-- Social Share Bar -->
+<div class="social-share-bar">
+  <div class="share-label">Share Grip Protocol — Game Crash Tracker</div>
+  <div class="social-share-icons">
+    <!-- X / Twitter -->
+    <a href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fapi.gamegrip.cloud&text=Grip%20Protocol%20%E2%80%94%20Game%20Crash%20Tracker" target="_blank" rel="noopener" class="social-share-btn" title="Share on X">
+      <svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+    </a>
+    <!-- Facebook -->
+    <a href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fapi.gamegrip.cloud" target="_blank" rel="noopener" class="social-share-btn" title="Share on Facebook">
+      <svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+    </a>
+    <!-- LinkedIn -->
+    <a href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fapi.gamegrip.cloud" target="_blank" rel="noopener" class="social-share-btn" title="Share on LinkedIn">
+      <svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+    </a>
+    <!-- Reddit -->
+    <a href="https://www.reddit.com/submit?url=https%3A%2F%2Fapi.gamegrip.cloud&title=Grip%20Protocol%20%E2%80%94%20Game%20Crash%20Tracker" target="_blank" rel="noopener" class="social-share-btn" title="Share on Reddit">
+      <svg viewBox="0 0 24 24"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>
+    </a>
+    <!-- Discord -->
+    <a href="https://discord.gg/wPgPNKvgw" target="_blank" rel="noopener" class="social-share-btn" title="Join Discord">
+      <svg viewBox="0 0 24 24"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+    </a>
+    <!-- Copy Link -->
+    <button class="social-share-btn" title="Copy link" onclick="copyShareLink(this)">
+      <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+    </button>
+  </div>
+  <div class="social-share-tooltip" id="shareTooltip">Link copied!</div>
+</div>
+<script>
+function copyShareLink(btn) {
+  navigator.clipboard.writeText(window.location.href).then(function() {
+    btn.classList.add('copied');
+    var tip = document.getElementById('shareTooltip');
+    tip.classList.add('show');
+    setTimeout(function() { btn.classList.remove('copied'); tip.classList.remove('show'); }, 2000);
+  });
+}
+</script>
+
+    <!-- FOOTER -->
+    <footer style="border-top:1px solid var(--card-border);padding:2rem 2rem 1.5rem;color:var(--text-secondary);font-size:0.78rem;">
+        <div style="max-width:1440px;margin:0 auto;">
+            <p style="line-height:1.8;margin-bottom:0.8rem;">Grip Protocol is a real-time game crash tracker and performance monitor built by <a href="https://gamegrip.cloud" style="color:var(--accent-blue);text-decoration:none;" rel="noopener">GameGrip</a>. Track gaming issues, bugs, FPS drops, shader stutter, server problems, and difficulty spikes across 65+ titles. Built for gamers, game developers, studios, and content creators.</p>
+            <p style="text-align:center;">&copy; 2026 GameGrip. All rights reserved. · <a href="mailto:hello@gamegrip.cloud" style="color:var(--accent-blue);text-decoration:none;">hello@gamegrip.cloud</a> · <a href="/v3/docs.html" style="color:var(--accent-blue);text-decoration:none;">API Docs</a> · <a href="/v3/protocol.html" style="color:var(--accent-blue);text-decoration:none;">Protocol</a> · <a href="https://jaffaai.cc" style="color:var(--accent-blue);text-decoration:none;">jaffaAi</a> · <a href="https://discord.gg/wPgPNKvgw" target="_blank" style="color:var(--accent-blue);text-decoration:none;">Discord</a> · <a href="https://sandbox.gamegrip.cloud" target="_blank" style="color:var(--accent-blue);text-decoration:none;">Sandbox</a> · <a href="/sitemap.xml" style="color:var(--accent-blue);text-decoration:none;">Sitemap</a></p>
+            <p style="text-align:center;margin-top:0.5rem;">A <a href="https://sewell.ink" style="color:var(--accent-orange);text-decoration:none;">Sewell.ink</a> brand</p>
+        </div>
+    </footer>
+
+    <script>
+        const API_BASE = window.location.origin;
+
+        const REFRESH_INTERVAL = 5000;
+        let apiKey = localStorage.getItem('grip_api_key') || '';
+
+        document.getElementById('apiLink').href = `${API_BASE}/v1/live/hotspots`;
+        document.getElementById('apiLink').textContent = API_BASE.replace('https://', '');
+
+        if (apiKey) {
+            document.getElementById('apiKeyInput').value = apiKey;
+            updateAuthStatus(true);
+        }
+
+        function setApiKey() {
+            apiKey = document.getElementById('apiKeyInput').value.trim();
+            if (apiKey) {
+                localStorage.setItem('grip_api_key', apiKey);
+                updateAuthStatus(true);
+            } else {
+                localStorage.removeItem('grip_api_key');
+                updateAuthStatus(false);
+            }
+            loadHotspots();
+        }
+
+        function updateAuthStatus(authenticated) {
+            const status = document.getElementById('authStatus');
+            if (authenticated) {
+                status.className = 'auth-status auth-ok';
+                status.textContent = '✓ Authenticated — live data + rate limited';
+            } else {
+                status.className = 'auth-status auth-missing';
+                status.textContent = 'Browsing freely — get an API key for full access';
+            }
+        }
+
+        function initTelemetryDots() {
+            const layer = document.getElementById('telemetryLayer');
+            for (let i = 0; i < 30; i++) {
+                const dot = document.createElement('div');
+                dot.className = 'telemetry-dot';
+                dot.style.left = Math.random() * 100 + '%';
+                dot.style.top = Math.random() * 100 + '%';
+                dot.style.animationDelay = Math.random() * 6 + 's';
+                dot.style.animationDuration = (4 + Math.random() * 4) + 's';
+                dot.style.opacity = 0.1 + Math.random() * 0.3;
+                layer.appendChild(dot);
+            }
+        }
+        initTelemetryDots();
+
+        let previousData = [];
+        let previousMetrics = {};
+
+        function getHeatClass(level) {
+            if (level.includes('Meltdown')) return 'heat-meltdown';
+            if (level.includes('Escalating')) return 'heat-escalating';
+            if (level.includes('Elevated')) return 'heat-elevated';
+            return 'heat-stabilizing';
+        }
+
+        function getMovementIcon(movement) {
+            if (movement === 'climbing') return '▲';
+            if (movement === 'dropping') return '▼';
+            return '—';
+        }
+
+        function getMovementClass(movement) {
+            if (movement === 'climbing') return 'movement-climbing';
+            if (movement === 'dropping') return 'movement-dropping';
+            return 'movement-stable';
+        }
+
+        function getPsiColor(psi) {
+            if (psi >= 80) return '#00d4ff';
+            if (psi >= 65) return '#FFD700';
+            if (psi >= 50) return '#ffd700';
+            return '#00d084';
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
+        }
+
+        function getTrendDirection(trendStr) {
+            const val = parseFloat(trendStr);
+            return val > 100 ? 'trend-up' : 'trend-down';
+        }
+
+        function renderCard(h, index) {
+            const psiColor = getPsiColor(h.psi);
+            const fixClass = h.verified_fix ? 'fix-available' : 'fix-unavailable';
+            const fixText = h.verified_fix ? '✓ Verified Fix' : '✗ No Fix Yet';
+            const fixTime = h.verified_fix ? h.time_to_solution : '—';
+
+            return `
+                <div class="card" data-game="${h.game_id}-${h.category}" style="animation-delay: ${index * 0.08}s">
+                    <div class="card-header">
+                        <div class="game-info">
+                            <div class="game-name">${h.game_name || h.game_id}</div>
+                            <div>
+                                <span class="platform-tag">${h.platform.replace(/_/g, ' ').toUpperCase()}</span>
+                                <span class="category-tag">${h.category.replace(/_/g, ' ')}</span>
+                            </div>
+                        </div>
+                        <div class="heat-badge ${getHeatClass(h.heat_level)}">
+                            ${h.heat_level}
+                        </div>
+                    </div>
+
+                    <div class="summary">${h.summary}</div>
+
+                    <div class="stats-row">
+                        <div class="stat">
+                            <div class="stat-value ${getTrendDirection(h.trend)}">${h.trend}</div>
+                            <div class="stat-label">Trend</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-value">${h.severity}</div>
+                            <div class="stat-label">
+                                Severity 
+                                <span class="severity-movement ${getMovementClass(h.severity_movement)}">
+                                    ${getMovementIcon(h.severity_movement)}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-value">${formatNumber(h.players_affected)}</div>
+                            <div class="stat-label">Players</div>
+                        </div>
+                    </div>
+
+                    <div class="psi-bar">
+                        <div class="psi-header">
+                            <span class="psi-label">Impact Score</span>
+                            <span class="psi-value" style="color: ${psiColor}">${h.psi}/100</span>
+                        </div>
+                        <div class="psi-track">
+                            <div class="psi-fill" style="width: ${h.psi}%; background: ${psiColor}"></div>
+                        </div>
+                    </div>
+
+                    <div class="meta-row">
+                        <span class="fix-status ${fixClass}">${fixText}</span>
+                        ${h.verified_fix ? `<span class="tts">⚡ Avg Fix: <strong>${fixTime}</strong></span>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderMetrics(hotspots) {
+            const incidents = hotspots.length;
+            const avgPsi = hotspots.reduce((a, h) => a + h.psi, 0) / incidents;
+            const verifiedFixes = hotspots.filter(h => h.verified_fix).length;
+            const totalPlayers = hotspots.reduce((a, h) => a + h.players_affected, 0);
+
+            const metrics = {
+                incidents: { val: incidents, prev: previousMetrics.incidents || incidents },
+                psi: { val: avgPsi.toFixed(1), prev: previousMetrics.psi || avgPsi },
+                fixes: { val: verifiedFixes, prev: previousMetrics.fixes || verifiedFixes },
+                players: { val: totalPlayers, prev: previousMetrics.players || totalPlayers }
+            };
+
+            document.getElementById('metricIncidents').textContent = metrics.incidents.val;
+            document.getElementById('metricPSI').textContent = metrics.psi.val;
+            document.getElementById('metricFixes').textContent = `${metrics.fixes.val}/${incidents}`;
+            document.getElementById('metricPlayers').textContent = formatNumber(metrics.players.val);
+
+            const incDelta = metrics.incidents.val - metrics.incidents.prev;
+            document.getElementById('metricIncidentsDelta').textContent = incDelta >= 0 ? `+${incDelta}` : `${incDelta}`;
+            document.getElementById('metricIncidentsDelta').className = `metric-delta ${incDelta >= 0 ? 'up' : 'down'}`;
+
+            const psiDelta = (avgPsi - (metrics.psi.prev || avgPsi)).toFixed(1);
+            document.getElementById('metricPSIDelta').textContent = psiDelta >= 0 ? `+${psiDelta}` : `${psiDelta}`;
+            document.getElementById('metricPSIDelta').className = `metric-delta ${psiDelta >= 0 ? 'up' : 'down'}`;
+
+            previousMetrics = {
+                incidents: metrics.incidents.val,
+                psi: avgPsi,
+                fixes: metrics.fixes.val,
+                players: metrics.players.val
+            };
+        }
+
+        function renderTicker(hotspots) {
+            const ticker = document.getElementById('ticker');
+            const items = hotspots.slice(0, 6).map(h => {
+                const alert = h.severity >= 8.5 ? '<span class="ticker-alert">[ALERT]</span>' : '';
+                return `<span class="ticker-item">
+                    <span class="ticker-game">${h.game_name || h.game_id}</span> 
+                    — ${h.summary.substring(0, 60)}... 
+                    PSI: ${h.psi} ${alert}
+                </span>`;
+            }).join('');
+            ticker.innerHTML = items + items;
+        }
+
+        async function loadHotspots() {
+            const grid = document.getElementById('grid');
+            const headers = apiKey ? { 'X-API-Key': apiKey } : {};
+
+            try {
+                const res = await fetch(`${API_BASE}/v1/live/hotspots?limit=12`, { headers });
+                if (res.status === 401) {
+                    grid.innerHTML = `
+                        <div class="state-message error">
+                            <h3>🔒 Authentication Required</h3>
+                            <p>This endpoint requires a valid Grip API key.</p>
+                            <p style="margin-top: 1rem;">
+                                <a href="#" onclick="document.getElementById('apiKeyInput').focus(); return false;" style="color: var(--accent-orange);">Enter your API key above</a> or 
+                                <code style="background: var(--card-bg); padding: 0.2rem 0.5rem; border-radius: 4px;">POST /v1/auth/register</code> to create one.
+                            </p>
+                        </div>
+                    `;
+                    return;
+                }
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+
+                if (!data.length) {
+                    grid.innerHTML = '<div class="state-message">No active issues detected right now.</div>';
+                    return;
+                }
+
+                renderMetrics(data);
+                renderTicker(data);
+
+                const html = data.map((h, i) => renderCard(h, i)).join('');
+                grid.innerHTML = html;
+                previousData = data;
+
+            } catch (e) {
+                console.error('Grip Protocol API error:', e);
+                if (!previousData.length) {
+                    grid.innerHTML = `
+                        <div class="state-message error">
+                            <h3>⚠️ Live Data Unavailable</h3>
+                            <p>Can't reach the Grip Protocol server right now</p>
+                            <p style="margin-top: 1rem; font-size: 0.9rem;">
+                                Check api.gamegrip.cloud/health for status.
+                            </p>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        loadHotspots();
+        setInterval(loadHotspots, REFRESH_INTERVAL);
+
+        // ==================== NAVIGATION ====================
+        function toggleNav() {
+            document.getElementById('navToggle').classList.toggle('open');
+            document.getElementById('navDrawer').classList.toggle('open');
+            document.getElementById('navBackdrop').classList.toggle('open');
+            document.body.style.overflow = document.getElementById('navDrawer').classList.contains('open') ? 'hidden' : '';
+        }
+
+        function switchSection(section) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-link[data-section]').forEach(l => l.classList.remove('active'));
+            const el = document.getElementById('section-' + section);
+            const link = document.querySelector(`.nav-link[data-section="${section}"]`);
+            if (el) el.classList.add('active');
+            if (link) link.classList.add('active');
+            if (section === 'registry' && !registryLoaded) loadRegistry();
+            window.scrollTo(0, 0);
+        }
+
+        // ==================== GAME REGISTRY ====================
+        let registryLoaded = false;
+        let allGames = [];
+
+        async function loadRegistry() {
+            const headers = apiKey ? { 'X-API-Key': apiKey } : {};
+            try {
+                const res = await fetch(`${API_BASE}/v1/games?limit=500`, { headers });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                allGames = await res.json();
+                registryLoaded = true;
+                populateFilters();
+                renderRegistry(allGames);
+                updateRegistryStats();
+            } catch (e) {
+                document.getElementById('registryGrid').innerHTML =
+                    `<div class="registry-empty">⚠️ Could not load registry. ${apiKey ? '' : 'Try entering an API key above.'}</div>`;
+            }
+        }
+
+        function populateFilters() {
+            const genres = new Set();
+            const platforms = new Set();
+            allGames.forEach(g => {
+                if (g.genre) genres.add(g.genre);
+                (g.platforms || []).forEach(p => platforms.add(p));
+            });
+            const genreSelect = document.getElementById('registryGenre');
+            [...genres].sort().forEach(genre => {
+                const opt = document.createElement('option');
+                opt.value = genre; opt.textContent = genre.replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+                genreSelect.appendChild(opt);
+            });
+            const platSelect = document.getElementById('registryPlatform');
+            [...platforms].sort().forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p; opt.textContent = p.replace(/_/g,' ').toUpperCase();
+                platSelect.appendChild(opt);
+            });
+        }
+
+        function updateRegistryStats() {
+            const genres = new Set(allGames.map(g => g.genre).filter(Boolean));
+            const platforms = new Set(allGames.flatMap(g => g.platforms || []));
+            const active = allGames.filter(g => g.tracking_status === 'active').length;
+            document.getElementById('regStatTotal').textContent = allGames.length;
+            document.getElementById('regStatGenres').textContent = genres.size;
+            document.getElementById('regStatPlatforms').textContent = platforms.size;
+            document.getElementById('regStatActive').textContent = active;
+        }
+
+        function filterGames() {
+            const search = document.getElementById('registrySearch').value.toLowerCase().trim();
+            const genre = document.getElementById('registryGenre').value;
+            const platform = document.getElementById('registryPlatform').value;
+            const status = document.getElementById('registryStatus').value;
+
+            let filtered = allGames.filter(g => {
+                if (genre && g.genre !== genre) return false;
+                if (platform && !(g.platforms || []).includes(platform)) return false;
+                if (status && g.tracking_status !== status) return false;
+                if (search) {
+                    const haystack = `${g.name} ${g.game_id} ${g.slug} ${g.genre || ''}`.toLowerCase();
+                    return haystack.includes(search);
+                }
+                return true;
+            });
+            renderRegistry(filtered);
+        }
+
+        document.getElementById('registrySearch').addEventListener('input', filterGames);
+        document.getElementById('registryGenre').addEventListener('change', filterGames);
+        document.getElementById('registryPlatform').addEventListener('change', filterGames);
+        document.getElementById('registryStatus').addEventListener('change', filterGames);
+
+        function renderRegistry(games) {
+            const grid = document.getElementById('registryGrid');
+            document.getElementById('registryCount').textContent = `Showing ${games.length} game${games.length !== 1 ? 's' : ''}`;
+            if (!games.length) {
+                grid.innerHTML = '<div class="registry-empty">No games match your filters.</div>';
+                return;
+            }
+            grid.innerHTML = games.map(g => {
+                const statusClass = g.tracking_status === 'active' ? 'status-active' :
+                                    g.tracking_status === 'pending' ? 'status-pending' : 'status-paused';
+                const platforms = (g.platforms || []).map(p =>
+                    `<span class="game-card-platform">${p.replace(/_/g,' ')}</span>`
+                ).join('');
+                return `
+                    <div class="game-card" onclick="showGameDetail('${g.game_id}')">
+                        <div class="game-card-top">
+                            <div>
+                                <div class="game-card-name">${g.name}</div>
+                                <div class="game-card-id">${g.game_id}</div>
+                            </div>
+                            <span class="game-card-genre">${(g.genre || 'unknown').replace(/-/g,' ')}</span>
+                        </div>
+                        <div class="game-card-meta">${platforms}</div>
+                        <div class="game-card-bottom">
+                            <span class="game-card-dev"></span>
+                            <span class="game-card-status ${statusClass}">${g.tracking_status}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function showGameDetail(gameId) {
+            const modal = document.getElementById('gameModal');
+            const content = document.getElementById('modalContent');
+            content.innerHTML = '<p style="color:var(--text-secondary)">Loading...</p>';
+            modal.classList.add('open');
+
+            const headers = apiKey ? { 'X-API-Key': apiKey } : {};
+            try {
+                const res = await fetch(`${API_BASE}/v1/games/${gameId}`, { headers });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const g = await res.json();
+
+                const platforms = (g.platforms || []).map(p =>
+                    `<span class="modal-tag platform">${p.replace(/_/g,' ').toUpperCase()}</span>`
+                ).join('');
+                const frictions = (g.default_friction_types || []).map(f =>
+                    `<span class="modal-tag friction">${f.replace(/_/g,' ')}</span>`
+                ).join('');
+
+                content.innerHTML = `
+                    <h2>${g.name}</h2>
+                    <span class="game-card-genre" style="margin-bottom:1rem;display:inline-block;">${(g.genre || '').replace(/-/g,' ')}${g.genre_secondary ? ' / ' + g.genre_secondary.replace(/-/g,' ') : ''}</span>
+
+                    <div class="modal-section">
+                        <h3>Info</h3>
+                        <div class="modal-info-row"><span class="modal-info-label">Game ID</span><span class="modal-info-value" style="font-family:monospace">${g.game_id}</span></div>
+                        <div class="modal-info-row"><span class="modal-info-label">Developer</span><span class="modal-info-value">${g.developer || '—'}</span></div>
+                        <div class="modal-info-row"><span class="modal-info-label">Publisher</span><span class="modal-info-value">${g.publisher || '—'}</span></div>
+                        <div class="modal-info-row"><span class="modal-info-label">Tracking Status</span><span class="modal-info-value">${g.tracking_status}</span></div>
+                        <div class="modal-info-row"><span class="modal-info-label">Total Reports</span><span class="modal-info-value">${g.total_signals}</span></div>
+                        <div class="modal-info-row"><span class="modal-info-label">Peak Impact</span><span class="modal-info-value">${g.peak_psi}</span></div>
+                        ${g.steam_app_id ? `<div class="modal-info-row"><span class="modal-info-label">Steam App ID</span><span class="modal-info-value">${g.steam_app_id}</span></div>` : ''}
+                    </div>
+
+                    <div class="modal-section">
+                        <h3>Platforms</h3>
+                        <div class="modal-tags">${platforms || '<span style="color:var(--text-secondary)">None listed</span>'}</div>
+                    </div>
+
+                    <div class="modal-section">
+                        <h3>Known Issue Types</h3>
+                        <div class="modal-tags">${frictions || '<span style="color:var(--text-secondary)">None listed yet</span>'}</div>
+                    </div>
+
+                    <div class="modal-section" style="margin-top:1.5rem;">
+                        <span style="font-size:0.72rem;color:var(--text-secondary)">
+                            Created: ${g.created_at || '—'} · Updated: ${g.updated_at || '—'}
+                        </span>
+                    </div>
+                `;
+            } catch (e) {
+                content.innerHTML = `<p style="color:var(--accent-red)">Failed to load game details.</p>`;
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('gameModal').classList.remove('open');
+        }
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+        // ==================== DEVELOPER PORTAL ====================
+        async function registerKey() {
+            const email = document.getElementById('regEmail').value.trim();
+            const type = document.getElementById('regType').value;
+            const tier = document.getElementById('regTier').value;
+            const btn = document.getElementById('regSubmitBtn');
+
+            // Hide previous results
+            document.getElementById('regResult').classList.remove('visible');
+            document.getElementById('regResult').style.display = 'none';
+            document.getElementById('regError').classList.remove('visible');
+            document.getElementById('regError').style.display = 'none';
+
+            if (!email || !email.includes('@')) {
+                showRegError('Please enter a valid email address.');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = '⏳ Generating...';
+
+            try {
+                const res = await fetch(`${API_BASE}/v1/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        owner_email: email,
+                        owner_type: type,
+                        rate_limit_tier: tier
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Registration failed');
+
+                document.getElementById('regKeyValue').textContent = data.api_key;
+                document.getElementById('regKeyId').textContent = data.key_id;
+                document.getElementById('regKeyType').textContent = data.owner_type;
+                document.getElementById('regKeyTier').textContent = data.rate_limit_tier;
+                document.getElementById('regKeyScopes').textContent = (data.scopes || []).join(', ');
+                document.getElementById('regResult').style.display = 'block';
+                document.getElementById('regResult').classList.add('visible');
+
+                // Auto-fill the main API key bar
+                const keyInput = document.getElementById('apiKeyInput');
+                if (keyInput) keyInput.value = data.api_key;
+                apiKey = data.api_key;
+            } catch (e) {
+                showRegError(e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔑 Generate API Key';
+            }
+        }
+
+        function showRegError(msg) {
+            document.getElementById('regErrorMsg').textContent = msg;
+            document.getElementById('regError').style.display = 'block';
+            document.getElementById('regError').classList.add('visible');
+        }
+
+        function copyKey() {
+            const key = document.getElementById('regKeyValue').textContent;
+            navigator.clipboard.writeText(key).then(() => {
+                const btn = document.querySelector('.dev-key-display .copy-btn');
+                btn.textContent = '✅ Copied!';
+                setTimeout(() => btn.textContent = 'Copy', 2000);
+            });
+        }
+
+        async function lookupKey() {
+            const key = document.getElementById('lookupKey').value.trim();
+            document.getElementById('lookupResult').classList.remove('visible');
+            document.getElementById('lookupResult').style.display = 'none';
+            document.getElementById('lookupError').style.display = 'none';
+
+            if (!key) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/v1/auth/me`, {
+                    headers: { 'X-API-Key': key }
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Invalid key');
+
+                document.getElementById('luKeyId').textContent = data.key_id;
+                document.getElementById('luEmail').textContent = data.owner_email;
+                document.getElementById('luType').textContent = data.owner_type;
+                document.getElementById('luTier').textContent = data.rate_limit_tier;
+                document.getElementById('luScopes').textContent = (Array.isArray(data.scopes) ? data.scopes : []).join(', ');
+                document.getElementById('luStatus').textContent = data.active ? '✅ Active' : '❌ Revoked';
+                document.getElementById('luStatus').style.color = data.active ? 'var(--accent-green)' : 'var(--accent-red)';
+                document.getElementById('luRequests').textContent = (data.request_count || 0).toLocaleString();
+                document.getElementById('luLastUsed').textContent = data.last_used_at || 'Never';
+                document.getElementById('luCreated').textContent = data.created_at || '—';
+                document.getElementById('lookupResult').style.display = 'block';
+                document.getElementById('lookupResult').classList.add('visible');
+            } catch (e) {
+                document.getElementById('lookupErrorMsg').textContent = e.message;
+                document.getElementById('lookupError').style.display = 'block';
+            }
+        }
+
+        // Handle deep-link (e.g. /#registry, /#devportal)
+        const hash = window.location.hash.replace('#','');
+        if (['registry','devportal'].includes(hash)) switchSection(hash);
+    </script>
+<!-- ==================== COOKIE CONSENT BANNER ==================== -->
+<div id="cookieBanner" style="
+  display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 100000;
+  background: #1a1a2e; border-top: 1px solid rgba(255,255,255,0.1);
+  padding: 1rem 1.5rem; font-family: 'Inter', system-ui, sans-serif;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
+">
+  <div style="max-width: 1100px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 1.2rem; flex-wrap: wrap;">
+    <div style="flex: 1; min-width: 240px;">
+      <p style="margin: 0; color: #e0e0e0; font-size: 0.85rem; line-height: 1.5;">
+        🍪 We use cookies and Google Analytics to understand how visitors use this site and to improve the experience.
+        No personal data is sold or shared with advertisers. By clicking <strong>Accept</strong>, you consent to analytics cookies.
+        <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener"
+           style="color: #00d4aa; text-decoration: underline;">Learn more</a>
+      </p>
+    </div>
+    <div style="display: flex; gap: 0.6rem; flex-shrink: 0;">
+      <button onclick="acceptCookies()" style="
+        background: #00d4aa; color: #0a0a1a; border: none; padding: 0.5rem 1.3rem;
+        border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer;
+        transition: background 0.2s;
+      " onmouseover="this.style.background='#00e8bb'" onmouseout="this.style.background='#00d4aa'">Accept</button>
+      <button onclick="declineCookies()" style="
+        background: transparent; color: #999; border: 1px solid #444; padding: 0.5rem 1.3rem;
+        border-radius: 6px; font-weight: 500; font-size: 0.85rem; cursor: pointer;
+        transition: border-color 0.2s;
+      " onmouseover="this.style.borderColor='#888'" onmouseout="this.style.borderColor='#444'">Decline</button>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  var consent = localStorage.getItem('cookie_consent');
+  if (!consent) {
+    document.getElementById('cookieBanner').style.display = 'block';
+  }
+})();
+function acceptCookies() {
+  localStorage.setItem('cookie_consent', 'accepted');
+  document.getElementById('cookieBanner').style.display = 'none';
+  loadGA();
+}
+function declineCookies() {
+  localStorage.setItem('cookie_consent', 'declined');
+  document.getElementById('cookieBanner').style.display = 'none';
+}
+</script>
+
+
+<!-- jaffaAi Chat Widget -->
+<div id="jaffa-chat-widget">
+<style>
+#jaffa-chat-btn{position:fixed;bottom:24px;right:24px;z-index:10000;width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#00B4D8,#0077B6);border:none;cursor:pointer;box-shadow:0 4px 20px rgba(0,180,216,0.4);display:flex;align-items:center;justify-content:center;transition:transform .2s,box-shadow .2s}
+#jaffa-chat-btn:hover{transform:scale(1.08);box-shadow:0 6px 28px rgba(0,180,216,0.55)}
+#jaffa-chat-btn svg{width:28px;height:28px;fill:#fff}
+#jaffa-chat-btn .close-icon{display:none}
+#jaffa-chat-btn.open .chat-icon{display:none}
+#jaffa-chat-btn.open .close-icon{display:block}
+#jaffa-chat-panel{position:fixed;bottom:96px;right:24px;z-index:10000;width:380px;max-width:calc(100vw - 32px);height:520px;max-height:calc(100vh - 140px);background:#0B0E17;border:1px solid rgba(0,180,216,0.25);border-radius:16px;display:none;flex-direction:column;box-shadow:0 12px 48px rgba(0,0,0,0.6);overflow:hidden;font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif}
+#jaffa-chat-panel.open{display:flex}
+.jc-header{background:linear-gradient(135deg,#111827,#1a1f35);padding:16px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(0,180,216,0.15)}
+.jc-header-dot{width:10px;height:10px;border-radius:50%;background:#22c55e;flex-shrink:0}
+.jc-header-info{flex:1}
+.jc-header-title{font-size:15px;font-weight:700;color:#fff}
+.jc-header-sub{font-size:11px;color:#94a3b8;margin-top:2px}
+.jc-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;scrollbar-width:thin;scrollbar-color:#333 transparent}
+.jc-msg{max-width:88%;padding:10px 14px;border-radius:14px;font-size:13.5px;line-height:1.5;word-wrap:break-word}
+.jc-msg.bot{align-self:flex-start;background:#1a1f35;color:#e2e8f0;border-bottom-left-radius:4px;border:1px solid rgba(255,255,255,0.06)}
+.jc-msg.user{align-self:flex-end;background:linear-gradient(135deg,#00B4D8,#0077B6);color:#fff;border-bottom-right-radius:4px}
+.jc-msg strong,.jc-msg b{color:#00B4D8;font-weight:600}
+.jc-msg.user strong,.jc-msg.user b{color:#fff}
+.jc-msg em,.jc-msg i{color:#94a3b8;font-style:italic}
+.jc-msg a{color:#38bdf8;text-decoration:underline}
+.jc-typing{align-self:flex-start;padding:10px 18px;background:#1a1f35;border-radius:14px;border-bottom-left-radius:4px;display:none}
+.jc-typing.show{display:flex;gap:4px;align-items:center}
+.jc-typing span{width:7px;height:7px;border-radius:50%;background:#64748b;animation:jcBounce 1.4s infinite ease-in-out both}
+.jc-typing span:nth-child(1){animation-delay:-.32s}
+.jc-typing span:nth-child(2){animation-delay:-.16s}
+@keyframes jcBounce{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}
+.jc-input-area{padding:12px 16px;border-top:1px solid rgba(255,255,255,0.08);display:flex;gap:8px;align-items:center;background:#0d1120}
+.jc-input{flex:1;background:#1a1f35;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:10px 14px;color:#e2e8f0;font-size:13.5px;outline:none;font-family:inherit;resize:none;max-height:80px;line-height:1.4}
+.jc-input::placeholder{color:#475569}
+.jc-input:focus{border-color:rgba(0,180,216,0.4)}
+.jc-send-btn{width:38px;height:38px;border-radius:10px;border:none;cursor:pointer;background:linear-gradient(135deg,#00B4D8,#0077B6);display:flex;align-items:center;justify-content:center;transition:opacity .2s;flex-shrink:0}
+.jc-send-btn:hover{opacity:.85}
+.jc-send-btn:disabled{opacity:.4;cursor:not-allowed}
+.jc-send-btn svg{width:18px;height:18px;fill:#fff}
+.jc-quick-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.jc-quick-btn{background:rgba(0,180,216,0.12);border:1px solid rgba(0,180,216,0.25);border-radius:8px;padding:6px 12px;color:#00B4D8;font-size:12px;cursor:pointer;transition:background .2s;font-family:inherit}
+.jc-quick-btn:hover{background:rgba(0,180,216,0.22)}
+@media(max-width:480px){#jaffa-chat-panel{width:calc(100vw - 16px);right:8px;bottom:88px;height:calc(100vh - 120px)}#jaffa-chat-btn{bottom:16px;right:16px;width:54px;height:54px}}
+
+/* ── Social Share Bar ── */
+.social-share-bar {
+  text-align: center;
+  padding: 1.5rem 2rem;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.social-share-bar .share-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 0.8rem;
+  font-weight: 600;
+}
+.social-share-icons {
+  display: flex;
+  justify-content: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.social-share-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+}
+.social-share-btn:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+  background: rgba(59,130,246,0.08);
+  transform: translateY(-2px);
+}
+.social-share-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+.social-share-btn.copied {
+  border-color: #22c55e;
+  color: #22c55e;
+  background: rgba(34,197,94,0.08);
+}
+.social-share-tooltip {
+  display: none;
+  font-size: 0.7rem;
+  color: #22c55e;
+  margin-top: 0.4rem;
+}
+.social-share-tooltip.show { display: block; }
+@media (max-width: 480px) {
+  .social-share-btn { width: 36px; height: 36px; }
+  .social-share-btn svg { width: 16px; height: 16px; }
+}
+
+</style>
+<div id="jaffa-chat-panel">
+    <div class="jc-header">
+        <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#00B4D8,#0077B6);display:flex;align-items:center;justify-content:center;font-size:20px;">🍊</div>
+        <div class="jc-header-info"><div class="jc-header-title">Jaffa</div><div class="jc-header-sub"><span class="jc-header-dot" style="display:inline-block;width:7px;height:7px;vertical-align:middle;margin-right:4px;"></span> Gaming Issue Triage AI</div></div>
+    </div>
+    <div class="jc-messages" id="jcMessages"></div>
+    <div class="jc-input-area">
+        <textarea class="jc-input" id="jcInput" placeholder="Describe your gaming issue..." rows="1"></textarea>
+        <button class="jc-send-btn" id="jcSendBtn" onclick="jcSend()"><svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>
+    </div>
+</div>
+<button id="jaffa-chat-btn" onclick="jcToggle()">
+    <svg class="chat-icon" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>
+    <svg class="close-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+</button>
+<script>
+(function(){
+    const API='https://jaffaai.cc/Jaffa';let sessionId=null,isOpen=false,isSending=false;
+    const input=document.getElementById('jcInput');
+    input.addEventListener('input',()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,80)+'px';});
+    input.addEventListener('keydown',(e)=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();jcSend();}});
+    window.jcToggle=function(){const p=document.getElementById('jaffa-chat-panel'),b=document.getElementById('jaffa-chat-btn');isOpen=!isOpen;p.classList.toggle('open',isOpen);b.classList.toggle('open',isOpen);if(isOpen){const m=document.getElementById('jcMessages');if(!m.children.length)jcShowWelcome();setTimeout(()=>input.focus(),100);}};
+    function jcShowWelcome(){addMsg('bot',"Hey! I'm <strong>Jaffa</strong> \ud83c\udf4a \u2014 jaffaAi's issue triage agent.\n\nTell me what's going wrong with your game and I'll find a fix.\n\n<em>Example: \"Elden Ring keeps crashing on Steam when I open my inventory\"</em>");const m=document.getElementById('jcMessages'),q=document.createElement('div');q.className='jc-quick-actions';['Game crashing','FPS drops','Won\'t launch','Controller not working'].forEach(t=>{const b=document.createElement('button');b.className='jc-quick-btn';b.textContent=t;b.onclick=()=>{input.value=t;jcSend();q.remove();};q.appendChild(b);});m.appendChild(q);sb();}
+    function addMsg(r,t){const m=document.getElementById('jcMessages'),d=document.createElement('div');d.className='jc-msg '+r;let h=t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<strong>$1</strong>').replace(/_(.+?)_/g,'<em>$1</em>').replace(/`(.+?)`/g,'<code style="background:#0d1120;padding:2px 5px;border-radius:4px;font-size:12px">$1</code>').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\n/g,'<br>');d.innerHTML=h;m.appendChild(d);sb();}
+    function st(s){let t=document.getElementById('jcTyping');if(!t){t=document.createElement('div');t.className='jc-typing';t.id='jcTyping';t.innerHTML='<span></span><span></span><span></span>';document.getElementById('jcMessages').appendChild(t);}t.classList.toggle('show',s);if(s)sb();}
+    function sb(){const m=document.getElementById('jcMessages');setTimeout(()=>m.scrollTop=m.scrollHeight,50);}
+    window.jcSend=async function(){if(isSending)return;const text=input.value.trim();if(!text)return;input.value='';input.style.height='auto';addMsg('user',text);isSending=true;document.getElementById('jcSendBtn').disabled=true;st(true);try{const r=await fetch(API+'/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text,sessionId})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Failed');sessionId=d.sessionId;st(false);addMsg('bot',d.reply);}catch(e){st(false);addMsg('bot','\u26a0\ufe0f Connection error \u2014 please try again.');}finally{isSending=false;document.getElementById('jcSendBtn').disabled=false;input.focus();}};
+})();
+</script>
+</div>
+
+</body>
+</html>

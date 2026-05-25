@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-D0STZF3Y83"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-D0STZF3Y83');
+    </script>
+    <!-- Google AdSense -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8220301553396805"
+         crossorigin="anonymous"></script>
+    <meta charset="UTF-8">
+    <meta name="google-adsense-account" content="ca-pub-8220301553396805">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Docs — GameGrip</title>
+    <meta name="description" content="Grip Protocol API v0.3 documentation. Gaming Incident Intelligence endpoints.">
+    <meta name="keywords" content="Grip Protocol API v0.3, gaming API docs, game incident endpoints, gaming developer documentation, game crash API, hotspot API, signal API, gaming intelligence docs, GameGrip developer, REST API gaming, game monitoring API, real-time gaming endpoints">
+    <meta property="og:title" content="API Docs — Grip Protocol v0.3 | GameGrip">
+    <meta property="og:description" content="Grip Protocol API v0.3 documentation. Gaming Incident Intelligence endpoints for hotspot tracking, signal detection, and friction scanning.">
+    <meta property="og:url" content="https://api.gamegrip.cloud/docs.html">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="GameGrip">
+    <meta property="og:image" content="https://api.gamegrip.cloud/og-image.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="API Docs — Grip Protocol v0.3 | GameGrip">
+    <meta name="twitter:description" content="Grip Protocol API v0.3 documentation. Gaming Incident Intelligence endpoints for hotspot tracking, signal detection, and friction scanning.">
+    <link rel="canonical" href="https://api.gamegrip.cloud/docs.html">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+        :root {
+            --bg: #08080f;
+            --card-bg: #0f0f1a;
+            --card-border: #1a1a2e;
+            --text: #e8e8f0;
+            --text-dim: #6b6b8a;
+            --red: #ff4d4d;
+            --orange: #ff9100;
+            --green: #00d084;
+            --blue: #4dabf7;
+            --purple: #845ef7;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        body::after {
+            content: '';
+            position: fixed; inset: 0;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .layout { display: flex; min-height: 100vh; position: relative; z-index: 2; }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px; min-height: 100vh; position: fixed; top: 0; left: 0;
+            background: var(--card-bg); border-right: 1px solid var(--card-border);
+            padding: 24px 0; overflow-y: auto;
+        }
+        .sidebar-brand { padding: 0 24px; margin-bottom: 32px; }
+        .sidebar-brand a { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+        .sidebar-icon {
+            width: 36px; height: 36px;
+            background: linear-gradient(135deg, var(--red), var(--orange));
+            border-radius: 8px; display: flex; align-items: center; justify-content: center;
+            font-weight: 900; font-size: 16px; color: white;
+        }
+        .sidebar-title { font-weight: 800; font-size: 17px; color: var(--text); }
+        .sidebar-sub { font-size: 10px; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase; }
+
+        .sidebar-nav { padding: 0 12px; }
+        .sidebar-section { font-size: 10px; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase; padding: 16px 12px 8px; }
+        .sidebar-link {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 12px; border-radius: 8px; text-decoration: none;
+            color: var(--text-dim); font-size: 14px; font-weight: 500; transition: all 0.15s;
+        }
+        .sidebar-link:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+        .sidebar-link.active { color: var(--text); background: rgba(255,77,77,0.1); }
+        .method-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+        .method-dot.get { background: var(--green); }
+        .method-dot.post { background: var(--blue); }
+
+        .sidebar-footer { position: absolute; bottom: 0; left: 0; right: 0; padding: 16px 24px; border-top: 1px solid var(--card-border); }
+        .sidebar-footer a { color: var(--text-dim); text-decoration: none; font-size: 13px; font-weight: 500; }
+        .sidebar-footer a:hover { color: var(--text); }
+
+        /* Main content */
+        .main { margin-left: 280px; flex: 1; padding: 48px; max-width: 960px; }
+
+        .doc-header { margin-bottom: 48px; }
+        .doc-header h1 { font-size: 36px; font-weight: 900; margin-bottom: 12px; }
+        .doc-header p { color: var(--text-dim); font-size: 16px; line-height: 1.6; }
+        .base-url {
+            display: inline-block; margin-top: 16px; padding: 10px 16px;
+            background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--green);
+        }
+        .version-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: rgba(0,208,132,0.1); border: 1px solid rgba(0,208,132,0.2);
+            padding: 4px 12px; border-radius: 100px; font-size: 12px; font-weight: 600; color: var(--green);
+            margin-left: 12px;
+        }
+
+        /* Endpoint blocks */
+        .endpoint {
+            margin-bottom: 48px; padding-bottom: 48px;
+            border-bottom: 1px solid var(--card-border);
+        }
+        .endpoint:last-child { border-bottom: none; }
+        .endpoint-title { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+        .endpoint-title h2 { font-size: 22px; font-weight: 800; }
+        .method-badge {
+            padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700;
+            font-family: 'JetBrains Mono', monospace; letter-spacing: 0.5px;
+        }
+        .method-get { background: rgba(0,208,132,0.15); color: var(--green); }
+        .method-post { background: rgba(77,171,247,0.15); color: var(--blue); }
+        .endpoint-path {
+            font-family: 'JetBrains Mono', monospace; font-size: 15px; color: var(--text);
+            background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px;
+            padding: 10px 16px; margin-bottom: 16px; display: block;
+        }
+        .endpoint-desc { color: var(--text-dim); font-size: 15px; line-height: 1.6; margin-bottom: 20px; }
+
+        .param-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .param-table th {
+            text-align: left; font-size: 10px; letter-spacing: 2px; color: var(--text-dim);
+            text-transform: uppercase; padding: 8px 12px;
+            border-bottom: 1px solid var(--card-border);
+        }
+        .param-table td {
+            padding: 10px 12px; border-bottom: 1px solid rgba(26,26,46,0.5);
+            font-size: 14px; vertical-align: top;
+        }
+        .param-name { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--blue); }
+        .param-type { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--purple); }
+        .param-required { font-size: 10px; font-weight: 700; color: var(--red); letter-spacing: 1px; }
+        .param-optional { font-size: 10px; font-weight: 700; color: var(--text-dim); letter-spacing: 1px; }
+
+        .code-tabs { display: flex; gap: 4px; margin-bottom: 0; }
+        .code-tab {
+            padding: 8px 16px; border-radius: 8px 8px 0 0;
+            font-size: 12px; font-weight: 600; cursor: pointer;
+            background: var(--card-bg); color: var(--text-dim); border: 1px solid var(--card-border);
+            border-bottom: none; transition: all 0.15s;
+        }
+        .code-tab.active { background: #060610; color: var(--text); }
+
+        .code-block {
+            background: #060610; border: 1px solid var(--card-border); border-radius: 0 8px 8px 8px;
+            padding: 20px; font-family: 'JetBrains Mono', monospace; font-size: 13px;
+            line-height: 1.7; overflow-x: auto; color: var(--text-dim); white-space: pre;
+        }
+        .code-block .k { color: var(--blue); }
+        .code-block .s { color: var(--green); }
+        .code-block .n { color: var(--orange); }
+        .code-block .b { color: var(--purple); }
+        .code-block .c { color: rgba(107,107,138,0.5); font-style: italic; }
+
+        .try-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
+            background: rgba(255,77,77,0.1); color: var(--red); border: 1px solid rgba(255,77,77,0.2);
+            cursor: pointer; transition: all 0.2s; text-decoration: none; margin-top: 12px;
+        }
+        .try-btn:hover { background: rgba(255,77,77,0.2); }
+
+        .response-example { margin-top: 20px; }
+        .response-label { font-size: 11px; letter-spacing: 2px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 8px; font-weight: 600; }
+
+        @media (max-width: 900px) {
+            .sidebar { display: none; }
+            .main { margin-left: 0; padding: 24px; }
+        }
+    </style>
+</head>
+<body>
+<!-- Loading Screen -->
+<div id="page-loader">
+  <div class="loader-inner">
+    <div class="loader-ring"></div>
+    <div class="loader-brand">GAME<span>GRIP</span></div>
+  </div>
+</div>
+<style>
+  #page-loader {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: #0B0E17;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.4s ease, visibility 0.4s ease;
+  }
+  #page-loader.fade-out {
+    opacity: 0;
+    visibility: hidden;
+  }
+  .loader-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+  }
+  .loader-ring {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(0, 212, 255, 0.15);
+    border-top-color: #00d4ff;
+    border-radius: 50%;
+    animation: loader-spin 0.8s linear infinite;
+  }
+  @keyframes loader-spin {
+    to { transform: rotate(360deg); }
+  }
+  .loader-brand {
+    font-family: 'Manrope', -apple-system, sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    color: rgba(255, 255, 255, 0.35);
+  }
+  .loader-brand span {
+    color: #00d4ff;
+  }
+</style>
+<script>
+  (function() {
+    var loader = document.getElementById("page-loader");
+    var maxTime = setTimeout(function() { loader.classList.add("fade-out"); }, 3000);
+    window.addEventListener("load", function() {
+      clearTimeout(maxTime);
+      var elapsed = performance.now();
+      var minDelay = Math.max(0, 400 - elapsed);
+      setTimeout(function() { loader.classList.add("fade-out"); }, minDelay);
+    });
+  })();
+</script>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <a href="/">
+                    <div class="sidebar-icon">G</div>
+                    <div>
+                        <div class="sidebar-title">GameGrip</div>
+                        <div class="sidebar-sub">API Documentation</div>
+                    </div>
+                </a>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="sidebar-section">Overview</div>
+                <a href="#introduction" class="sidebar-link active">Introduction</a>
+                <a href="#authentication" class="sidebar-link">Authentication</a>
+
+                <div class="sidebar-section">Read Endpoints</div>
+                <a href="#get-status" class="sidebar-link"><span class="method-dot get"></span> Status</a>
+                <a href="#get-hotspots" class="sidebar-link"><span class="method-dot get"></span> Live Hotspots</a>
+                <a href="#get-signals" class="sidebar-link"><span class="method-dot get"></span> Active Signals</a>
+
+                <div class="sidebar-section">Write Endpoints</div>
+                <a href="#post-scan" class="sidebar-link"><span class="method-dot post"></span> Friction Scan</a>
+                <a href="#post-solve" class="sidebar-link"><span class="method-dot post"></span> Solve</a>
+                <a href="#post-device" class="sidebar-link"><span class="method-dot post"></span> Device Optimize</a>
+                <a href="#post-ingest" class="sidebar-link"><span class="method-dot post"></span> Events Ingest</a>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="/live">← Back to Live Dashboard</a>
+            </div>
+        </aside>
+
+        <main class="main">
+            <div class="doc-header" id="introduction">
+                <h1>Grip Protocol API <span class="version-badge">v0.3.0</span></h1>
+                <p>Gaming Incident Intelligence platform. Real-time friction detection, player stress indexing, and verified solution matching across PC, console, and handheld platforms.</p>
+                <div class="base-url">https://api.gamegrip.cloud</div>
+            </div>
+
+            <div class="endpoint" id="authentication">
+                <div class="endpoint-title">
+                    <h2>Authentication</h2>
+                </div>
+                <p class="endpoint-desc">The API is currently open during the v0.3 preview period. No authentication required. Rate limiting applies: 100 requests/minute per IP.</p>
+            </div>
+
+            <!-- GET /v1/status -->
+            <div class="endpoint" id="get-status">
+                <div class="endpoint-title">
+                    <span class="method-badge method-get">GET</span>
+                    <h2>System Status</h2>
+                </div>
+                <code class="endpoint-path">/v1/status</code>
+                <p class="endpoint-desc">Health check endpoint. Returns version, uptime, active incident count, and average PSI across all monitored games.</p>
+                
+                <div class="code-tabs"><div class="code-tab active">cURL</div></div>
+                <div class="code-block">curl https://api.gamegrip.cloud/v1/status</div>
+
+                <div class="response-example">
+                    <div class="response-label">Response — 200 OK</div>
+                    <div class="code-block">{
+  <span class="k">"status"</span>: <span class="s">"gripping"</span>,
+  <span class="k">"version"</span>: <span class="s">"0.3.0"</span>,
+  <span class="k">"service"</span>: <span class="s">"grip-protocol-api"</span>,
+  <span class="k">"active_incidents"</span>: <span class="n">10</span>,
+  <span class="k">"avg_psi"</span>: <span class="n">98.1</span>,
+  <span class="k">"total_signals_ingested"</span>: <span class="n">10</span>,
+  <span class="k">"total_raw_events"</span>: <span class="n">10</span>
+}</div>
+                </div>
+                <a href="/v1/status" class="try-btn" target="_blank">⚡ Try it →</a>
+            </div>
+
+            <!-- GET /v1/live/hotspots -->
+            <div class="endpoint" id="get-hotspots">
+                <div class="endpoint-title">
+                    <span class="method-badge method-get">GET</span>
+                    <h2>Live Hotspots</h2>
+                </div>
+                <code class="endpoint-path">/v1/live/hotspots</code>
+                <p class="endpoint-desc">Active friction hotspots ranked by Player Stress Index. Returns the current incidents breaking players across all monitored games and platforms.</p>
+
+                <table class="param-table">
+                    <tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                    <tr>
+                        <td><span class="param-name">limit</span></td>
+                        <td><span class="param-type">integer</span></td>
+                        <td><span class="param-optional">OPTIONAL</span></td>
+                        <td>Max results to return. Default: 20</td>
+                    </tr>
+                </table>
+
+                <div class="code-tabs"><div class="code-tab active">cURL</div></div>
+                <div class="code-block">curl "https://api.gamegrip.cloud/v1/live/hotspots?limit=5"</div>
+
+                <div class="response-example">
+                    <div class="response-label">Response — 200 OK</div>
+                    <div class="code-block">[
+  {
+    <span class="k">"game_id"</span>: <span class="s">"elden-ring"</span>,
+    <span class="k">"game_name"</span>: <span class="s">"Elden Ring"</span>,
+    <span class="k">"platform"</span>: <span class="s">"pc"</span>,
+    <span class="k">"category"</span>: <span class="s">"difficulty_spike"</span>,
+    <span class="k">"severity"</span>: <span class="n">9.7</span>,
+    <span class="k">"psi"</span>: <span class="n">100.0</span>,
+    <span class="k">"heat_level"</span>: <span class="s">"🔥 Meltdown"</span>,
+    <span class="k">"players_affected"</span>: <span class="n">8500</span>,
+    <span class="k">"trend"</span>: <span class="s">"+302%"</span>,
+    <span class="k">"verified_fix"</span>: <span class="b">true</span>,
+    <span class="k">"time_to_solution"</span>: <span class="s">"12m 0s"</span>,
+    <span class="k">"summary"</span>: <span class="s">"Malenia Phase 2 Waterfowl Dance..."</span>
+  }
+]</div>
+                </div>
+                <a href="/v1/live/hotspots" class="try-btn" target="_blank">⚡ Try it →</a>
+            </div>
+
+            <!-- GET /v1/signals/active -->
+            <div class="endpoint" id="get-signals">
+                <div class="endpoint-title">
+                    <span class="method-badge method-get">GET</span>
+                    <h2>Active Signals</h2>
+                </div>
+                <code class="endpoint-path">/v1/signals/active</code>
+                <p class="endpoint-desc">Raw signal data from the ingestion pipeline. Unprocessed friction signals before PSI scoring.</p>
+
+                <div class="code-tabs"><div class="code-tab active">cURL</div></div>
+                <div class="code-block">curl https://api.gamegrip.cloud/v1/signals/active</div>
+                <a href="/v1/signals/active" class="try-btn" target="_blank">⚡ Try it →</a>
+            </div>
+
+            <!-- POST /v1/friction/scan -->
+            <div class="endpoint" id="post-scan">
+                <div class="endpoint-title">
+                    <span class="method-badge method-post">POST</span>
+                    <h2>Friction Scan</h2>
+                </div>
+                <code class="endpoint-path">/v1/friction/scan</code>
+                <p class="endpoint-desc">Analyze a player-reported issue. Returns friction score, category classification, probable root causes, and matched fixes from the verified solution database.</p>
+
+                <table class="param-table">
+                    <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                    <tr>
+                        <td><span class="param-name">game</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td><span class="param-required">REQUIRED</span></td>
+                        <td>Game name (e.g. "Elden Ring", "Helldivers 2")</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">platform</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td><span class="param-optional">OPTIONAL</span></td>
+                        <td>Platform: pc, ps5, xbox, steam_deck_oled, etc.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">issue</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td><span class="param-required">REQUIRED</span></td>
+                        <td>Natural language description of the issue</td>
+                    </tr>
+                </table>
+
+                <div class="code-tabs"><div class="code-tab active">cURL</div></div>
+                <div class="code-block">curl -X POST https://api.gamegrip.cloud/v1/friction/scan \
+  -H "Content-Type: application/json" \
+  -d '{
+    "game": "Elden Ring",
+    "platform": "pc",
+    "issue": "fps drops during boss fights"
+  }'</div>
+
+                <div class="response-example">
+                    <div class="response-label">Response — 200 OK</div>
+                    <div class="code-block">{
+  <span class="k">"friction_score"</span>: <span class="n">7.2</span>,
+  <span class="k">"category"</span>: <span class="s">"performance"</span>,
+  <span class="k">"probable_causes"</span>: [
+    <span class="s">"VRAM allocation"</span>,
+    <span class="s">"Thermal throttling"</span>,
+    <span class="s">"Driver issue"</span>
+  ],
+  <span class="k">"recommended_fixes"</span>: [{
+    <span class="k">"title"</span>: <span class="s">"Elden Ring Performance Fix"</span>,
+    <span class="k">"steps"</span>: [<span class="s">"Disable Steam overlay"</span>, <span class="s">"Set EAC to Background"</span>, ...],
+    <span class="k">"verified"</span>: <span class="b">true</span>
+  }],
+  <span class="k">"psi"</span>: <span class="n">39.6</span>
+}</div>
+                </div>
+            </div>
+
+            <!-- POST /v1/solve -->
+            <div class="endpoint" id="post-solve">
+                <div class="endpoint-title">
+                    <span class="method-badge method-post">POST</span>
+                    <h2>Solve</h2>
+                </div>
+                <code class="endpoint-path">/v1/solve</code>
+                <p class="endpoint-desc">Match a problem to verified community solutions. Returns fix steps, estimated time to resolution, and PSI impact score.</p>
+
+                <table class="param-table">
+                    <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                    <tr>
+                        <td><span class="param-name">game</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td><span class="param-required">REQUIRED</span></td>
+                        <td>Game name</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">problem</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td><span class="param-required">REQUIRED</span></td>
+                        <td>Problem description to match against solutions</td>
+                    </tr>
+                </table>
+
+                <div class="code-tabs"><div class="code-tab active">cURL</div></div>
+                <div class="code-block">curl -X POST https://api.gamegrip.cloud/v1/solve \
+  -H "Content-Type: application/json" \
+  -d '{"game": "Elden Ring", "problem": "malenia waterfowl dance"}'</div>
+
+                <div class="response-example">
+                    <div class="response-label">Response — 200 OK</div>
+                    <div class="code-block">{
+  <span class="k">"fixes"</span>: [{
+    <span class="k">"title"</span>: <span class="s">"Malenia - Bloodhound Step Dodge"</span>,
+    <span class="k">"steps"</span>: [
+      <span class="s">"Equip Bloodhound Step Ash of War"</span>,
+      <span class="s">"Wait for jump animation"</span>,
+      <span class="s">"Dodge backward then sideways"</span>,
+      <span class="s">"Punish after 3rd flurry"</span>
+    ],
+    <span class="k">"time_to_solution"</span>: <span class="s">"12m 0s"</span>,
+    <span class="k">"verified"</span>: <span class="b">true</span>
+  }],
+  <span class="k">"estimated_time"</span>: <span class="s">"12 mins"</span>,
+  <span class="k">"verified"</span>: <span class="b">true</span>,
+  <span class="k">"psi_impact"</span>: <span class="n">42.2</span>
+}</div>
+                </div>
+            </div>
+
+            <!-- POST /v1/device/optimize -->
+            <div class="endpoint" id="post-device">
+                <div class="endpoint-title">
+                    <span class="method-badge method-post">POST</span>
+                    <h2>Device Optimize</h2>
+                </div>
+                <code class="endpoint-path">/v1/device/optimize</code>
+                <p class="endpoint-desc">Handheld optimization engine. Returns tuned settings for TDP, FPS cap, upscaling, and estimated battery life per device + game combination.</p>
+
+                <table class="param-table">
+                    <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                    <tr>
+                        <td><span class="param-name">device</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td><span class="param-required">REQUIRED</span></td>
+                        <td>Device ID: steam_deck_oled, rog_ally, legion_go, switch_2, etc.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">game</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td><span class="param-required">REQUIRED</span></td>
+                        <td>Game name</td>
+                    </tr>
+                    <tr>
+                        <td><span class="param-name">priority</span></td>
+                        <td><span class="param-type">string</span></td>
+                        <td><span class="param-optional">OPTIONAL</span></td>
+                        <td>Optimization priority: battery | balanced | performance. Default: balanced</td>
+                    </tr>
+                </table>
+
+                <div class="code-tabs"><div class="code-tab active">cURL</div></div>
+                <div class="code-block">curl -X POST https://api.gamegrip.cloud/v1/device/optimize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device": "steam_deck_oled",
+    "game": "Cyberpunk 2077",
+    "priority": "balanced"
+  }'</div>
+
+                <div class="response-example">
+                    <div class="response-label">Response — 200 OK</div>
+                    <div class="code-block">{
+  <span class="k">"fps_cap"</span>: <span class="n">30</span>,
+  <span class="k">"tdp"</span>: <span class="n">13</span>,
+  <span class="k">"estimated_battery"</span>: <span class="s">"2h 18m"</span>,
+  <span class="k">"settings"</span>: [
+    {<span class="k">"setting"</span>: <span class="s">"TDP Limit"</span>, <span class="k">"value"</span>: <span class="s">"13W"</span>},
+    {<span class="k">"setting"</span>: <span class="s">"FPS Cap"</span>, <span class="k">"value"</span>: <span class="s">"30"</span>},
+    {<span class="k">"setting"</span>: <span class="s">"Upscaling"</span>, <span class="k">"value"</span>: <span class="s">"FSR 2.1 Balanced"</span>},
+    {<span class="k">"setting"</span>: <span class="s">"VSync"</span>, <span class="k">"value"</span>: <span class="s">"Adaptive"</span>}
+  ]
+}</div>
+                </div>
+            </div>
+
+            <!-- POST /v1/events/ingest -->
+            <div class="endpoint" id="post-ingest">
+                <div class="endpoint-title">
+                    <span class="method-badge method-post">POST</span>
+                    <h2>Events Ingest</h2>
+                </div>
+                <code class="endpoint-path">/v1/events/ingest</code>
+                <p class="endpoint-desc">Ingest raw telemetry events from any source — Reddit, Twitter/X, Discord, Steam forums, or in-game telemetry. Events are scored and may create new friction hotspots.</p>
+
+                <div class="code-tabs"><div class="code-tab active">cURL</div></div>
+                <div class="code-block">curl -X POST https://api.gamegrip.cloud/v1/events/ingest \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "reddit",
+    "signal": {
+      "game_id": "elden-ring",
+      "category": "performance",
+      "severity_estimate": 8.5
+    },
+    "metrics": {
+      "volume": 500
+    }
+  }'</div>
+
+                <div class="response-example">
+                    <div class="response-label">Response — 200 OK</div>
+                    <div class="code-block">{
+  <span class="k">"event_id"</span>: <span class="s">"evt_a1b2c3d4e5f6..."</span>,
+  <span class="k">"status"</span>: <span class="s">"ingested"</span>,
+  <span class="k">"signal_score"</span>: <span class="n">9.3</span>,
+  <span class="k">"psi_contribution"</span>: <span class="n">47.3</span>,
+  <span class="k">"hotspot_created"</span>: <span class="b">true</span>,
+  <span class="k">"processing_time_ms"</span>: <span class="n">42</span>
+}</div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

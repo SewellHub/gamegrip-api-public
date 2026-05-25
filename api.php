@@ -1,0 +1,1477 @@
+<?php
+/**
+ * Grip Protocol API v0.4a — Trust Layer
+ * Gaming Incident Intelligence Platform
+ * Auth + Webhooks + Rate Limits + Confidence Scores
+ *
+ * Routes:
+ *   POST /v1/auth/register     → Register API key
+ *   GET  /v1/auth/me           → Key info (authed)
+ *   POST /v1/auth/rotate       → Rotate key (authed)
+ *   DELETE /v1/auth/revoke     → Revoke key (authed)
+ *   GET  /v1/status            → Platform health (authed + rate limited)
+ *   GET  /v1/live/hotspots     → Active friction hotspots (authed + rate limited)
+ *   GET  /v1/signals/active    → Raw signal data (authed, scope: read:signals)
+ *   POST /v1/friction/scan     → Analyze friction (authed + rate limited)
+ *   POST /v1/solve             → Match solutions (authed + rate limited)
+ *   POST /v1/device/optimize   → Handheld optimizer (authed + rate limited)
+ *   POST /v1/events/ingest     → Signal ingestion (authed, scope: ingest)
+ *   POST /v1/dev/friction      → Dev telemetry (authed + rate limited)
+ *   POST /v1/webhooks          → Create webhook (authed, scope: webhooks:manage)
+ *   GET  /v1/webhooks          → List webhooks (authed)
+ *   DELETE /v1/webhooks/{id}   → Delete webhook (authed, scope: webhooks:manage)
+ *   POST /v1/webhooks/{id}/test → Test webhook (authed, scope: webhooks:manage)
+ *   GET  /v1/webhooks/{id}/deliveries → Delivery history (authed)
+ *   GET  /health               → Health check (public)
+ */
+
+header('Content-Type: application/json');
+// ── CORS: locked to known origins ──
+$allowed_origins = [
+    'https://jaffaai.cc',
+    'https://sandbox.gamegrip.cloud',
+    'https://api.gamegrip.cloud',
+    'https://auth.gamegrip.cloud',
+    'https://gamegrip.cloud',
+];
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (in_array($origin, $allowed_origins, true)) {
+    header("Access-Control-Allow-Origin: $origin");
+} else {
+    header('Access-Control-Allow-Origin: https://jaffaai.cc');
+}
+header('Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-API-Key');
+header('Vary: Origin');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(204);
+    exit;
+}
+
+// ==================== DATABASE ====================
+
+function get_db(): PDO {
+    static $pdo = null;
+    if ($pdo !== null) return $pdo;
+    $pdo = new PDO(
+        'mysql:host=localhost;dbname=gamexgps_grip_v4;charset=utf8mb4',
+        'gamexgps_grip4',
+        'GripV4_Pr0tocol_2026!',
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
+    );
+    return $pdo;
+}
+
+function json_body(): ?array {
+    return json_decode(file_get_contents('php://input'), true);
+}
+
+function json_out($data, int $code = 200): void {
+    http_response_code($code);
+    echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+function error_out(string $msg, int $code = 400): void {
+    json_out(['error' => $msg], $code);
+}
+
+function gen_id(string $prefix = 'id'): string {
+    return $prefix . '_' . bin2hex(random_bytes(12));
+}
+
+// ==================== AUTH LAYER ====================
+
+function hash_key(string $raw): string {
+    return hash('sha256', $raw);
+}
+
+function generate_api_key(): array {
+    $key_id = 'key_' . bin2hex(random_bytes(8));
+    $raw = 'grip_' . rtrim(strtr(base64_encode(random_bytes(36)), '+/', '-_'), '=');
+    $hash = hash_key($raw);
+    return [$key_id, $raw, $hash];
+}
+
+/**
+ * Optional auth — returns api_key row if key provided, null otherwise.
+ * Use for public-facing read endpoints that work with or without a key.
+ */
+function optional_auth_and_rate_limit(): ?array {
+    $raw = $_SERVER['HTTP_X_API_KEY'] ?? null;
+    if (!$raw) return null;  // No key = anonymous access
+    if (strpos($raw, 'grip_') !== 0) return null;
+
+    $db = get_db();
+    $hash = hash_key($raw);
+    $stmt = $db->prepare('SELECT * FROM api_keys WHERE key_hash = ? AND active = 1');
+    $stmt->execute([$hash]);
+    $key = $stmt->fetch();
+    if (!$key) return null;  // Bad key = still allow anonymous
+
+    // Update usage
+    $db->prepare('UPDATE api_keys SET last_used_at = NOW(), request_count = request_count + 1 WHERE key_id = ?')
+       ->execute([$key['key_id']]);
+    enforce_rate_limit($key);
+    return $key;
+}
+
+/**
+ * Validate X-API-Key header. Returns api_key row or calls error_out.
+ */
+function validate_api_key(): array {
+    $raw = $_SERVER['HTTP_X_API_KEY'] ?? null;
+    if (!$raw) error_out('Missing X-API-Key header', 401);
+    if (strpos($raw, 'grip_') !== 0) error_out('Invalid API key format', 401);
+
+    $db = get_db();
+    $hash = hash_key($raw);
+    $stmt = $db->prepare('SELECT * FROM api_keys WHERE key_hash = ? AND active = 1');
+    $stmt->execute([$hash]);
+    $key = $stmt->fetch();
+    if (!$key) error_out('Invalid or revoked API key', 401);
+
+    // Update usage
+    $db->prepare('UPDATE api_keys SET last_used_at = NOW(), request_count = request_count + 1 WHERE key_id = ?')
+       ->execute([$key['key_id']]);
+
+    return $key;
+}
+
+/**
+ * Check scope on validated key.
+ */
+function check_scope(array $key, string $scope): void {
+    $scopes = json_decode($key['scopes'], true) ?: [];
+    if (!in_array($scope, $scopes) && !in_array('admin', $scopes)) {
+        error_out("Scope '{$scope}' required. Your scopes: " . implode(', ', $scopes), 403);
+    }
+}
+
+/**
+ * Rate limit enforcement (MySQL-based sliding window).
+ */
+function enforce_rate_limit(array $key): void {
+    $limits = ['free' => 60, 'pro' => 600, 'enterprise' => 6000];
+    $tier = $key['rate_limit_tier'] ?? 'free';
+    $limit = $limits[$tier] ?? 60;
+    $kid = $key['key_id'];
+
+    $db = get_db();
+
+    // Clean old entries (older than 1 minute)
+    $db->prepare('DELETE FROM rate_limit_log WHERE key_id = ? AND requested_at < DATE_SUB(NOW(), INTERVAL 1 MINUTE)')
+       ->execute([$kid]);
+
+    // Count recent
+    $stmt = $db->prepare('SELECT COUNT(*) as cnt FROM rate_limit_log WHERE key_id = ? AND requested_at >= DATE_SUB(NOW(), INTERVAL 1 MINUTE)');
+    $stmt->execute([$kid]);
+    $count = (int)$stmt->fetchColumn();
+
+    if ($count >= $limit) {
+        error_out("Rate limit exceeded. Tier: {$tier}, Limit: {$limit}/min", 429);
+    }
+
+    // Log this request
+    $db->prepare('INSERT INTO rate_limit_log (key_id) VALUES (?)')->execute([$kid]);
+}
+
+/**
+ * Combined: validate + rate limit.
+ */
+function auth_and_rate_limit(): array {
+    $key = validate_api_key();
+    enforce_rate_limit($key);
+    return $key;
+}
+
+// ==================== SCORING ENGINE ====================
+
+function calculate_signal_score(array $evt): float {
+    $source_weights = [
+        'manual_moderator_report' => 1.0, 'crash_report_aggregator' => 0.95,
+        'steam_review_spike' => 0.8, 'reddit_keyword_burst' => 0.6,
+        'discord_complaint_cluster' => 0.5, 'simulated_synthetic' => 0.3,
+    ];
+    $sw = $source_weights[$evt['source']['type']] ?? 0.4;
+    $base = (float)$evt['signal']['severity_estimate'] * $sw;
+    $vol_boost = log10($evt['metrics']['volume'] + 1) * 2.0;
+    $vel_boost = min($evt['metrics']['velocity'] / 100.0, 5.0);
+    $sent_pen = abs($evt['metrics']['sentiment']) * 3.0;
+    return round($base + $vol_boost + $vel_boost + $sent_pen, 2);
+}
+
+function calculate_psi(float $signal, int $volume, float $trend = 0): float {
+    $sev = $signal * 5.5;
+    $tw = min($trend / 5.0, 25);
+    $vw = min($volume / 1000.0, 20);
+    return round(min(100, $sev + $tw + $vw), 1);
+}
+
+function get_heat_level(float $sev, float $psi): string {
+    if ($sev >= 8.5 || $psi >= 85) return '🔥 Meltdown';
+    if ($sev >= 7.0 || $psi >= 70) return '⚠️ Escalating';
+    if ($sev >= 5.5 || $psi >= 55) return '🟡 Elevated';
+    return '🟢 Stabilizing';
+}
+
+function calculate_decay(string $created_at): float {
+    $hours = (time() - strtotime($created_at)) / 3600.0;
+    if ($hours >= 24) return 0.1;
+    return round(1.0 - ($hours / 24.0) * 0.9, 3);
+}
+
+// ==================== CLASSIFICATION ====================
+
+function classify_issue(string $issue): array {
+    $cats = [
+        'performance'     => ['fps','stutter','lag','drop','performance','slow','frame','pacing','freeze'],
+        'crash'           => ['crash','ctd','black screen','close','exit','hang','freeze'],
+        'difficulty_spike' => ['boss','stuck',"can't beat",'impossible','hard','malenia','phase','chronos','radahn'],
+        'hardware'        => ['battery','hot','thermal','drain','overheat','tdp'],
+        'server_issue'    => ['server','disconnect','rollback','desync','packet','latency','ping'],
+        'shader_stutter'  => ['shader','compilation','hitching'],
+        'choice_paralysis' => ['overwhelm','too many','decision','confused','lost','choice','paralysis'],
+        'audio'           => ['sound','music','voice_chat','spatial_audio','audio'],
+        'visual'          => ['graphics','texture','shadow','lighting','ray_tracing'],
+        'matchmaking'     => ['queue','sbmm','ranked','party','matchmaking'],
+        'anti_cheat'      => ['false_positive','ban','cheater','anti_cheat'],
+        'save_data'       => ['corruption','lost_progress','cloud_sync','save'],
+        'monetization'    => ['purchase','dlc','battle_pass','currency'],
+        'ui'              => ['menu','hud','text','localization','ui'],
+    ];
+    $cause_map = [
+        'performance'      => ['VRAM allocation','Thermal throttling','Driver issue','Shader compilation','Patch regression'],
+        'crash'            => ['Patch incompatibility','Mod conflict','Driver crash','Memory leak','Save corruption'],
+        'difficulty_spike'  => ['Mechanic misunderstanding','Under-leveled','Wrong build','Missing key item','Pattern recognition failure'],
+        'hardware'         => ['TDP too high','Uncapped FPS','Background processes','Ambient temperature'],
+        'server_issue'     => ['Netcode desync','Server overload','Packet loss','ISP routing'],
+        'shader_stutter'   => ['Shader cache cold','Pipeline compilation','Driver overhead'],
+        'choice_paralysis'  => ['Information overload','Poor quest guidance','UI clutter'],
+        'audio'            => ['Audio driver conflict','Spatial processing error','Codec mismatch'],
+        'visual'           => ['GPU driver issue','VRAM overflow','Render pipeline bug'],
+        'matchmaking'      => ['SBMM algorithm issue','Region routing','Party sync failure'],
+        'anti_cheat'       => ['False positive detection','Kernel driver conflict','Software collision'],
+        'save_data'        => ['Cloud sync race condition','Disk write failure','Corruption on crash'],
+        'monetization'     => ['Payment gateway issue','Entitlement sync','Currency conversion error'],
+        'ui'               => ['Resolution scaling','Localization missing','Layout overflow'],
+    ];
+    foreach ($cats as $cat => $kws) {
+        foreach ($kws as $kw) {
+            if (stripos($issue, $kw) !== false) {
+                $sev = match($cat) {
+                    'crash'            => mt_rand(70, 95) / 10.0,
+                    'difficulty_spike'  => mt_rand(80, 98) / 10.0,
+                    'performance'      => mt_rand(65, 90) / 10.0,
+                    'server_issue'     => mt_rand(70, 90) / 10.0,
+                    'hardware'         => mt_rand(50, 75) / 10.0,
+                    default            => mt_rand(40, 70) / 10.0,
+                };
+                return [$cat, $sev, $cause_map[$cat] ?? ['Unknown']];
+            }
+        }
+    }
+    return ['general', 5.0, ['Unknown - requires manual review']];
+}
+
+// ==================== HOTSPOT GENERATOR ====================
+
+function generate_hotspots(PDO $db, int $limit = 50): array {
+    $cutoff = date('Y-m-d H:i:s', strtotime('-24 hours'));
+    $stmt = $db->prepare('SELECT * FROM friction_signals WHERE active = 1 AND created_at >= ? ORDER BY psi DESC');
+    $stmt->execute([$cutoff]);
+    $signals = $stmt->fetchAll();
+    if (!$signals) return [];
+
+    // Bucket by game_id + platform + friction_type
+    $buckets = [];
+    foreach ($signals as $s) {
+        $key = $s['game_id'] . '|' . $s['platform'] . '|' . $s['friction_type'];
+        $buckets[$key][] = $s;
+    }
+
+    // Game name map
+    $games = [];
+    foreach ($db->query('SELECT id, name FROM games')->fetchAll() as $g) {
+        $games[$g['id']] = $g['name'];
+    }
+
+    // Solution map
+    $sol_stmt = $db->query('SELECT game_id, time_to_solution FROM solutions WHERE verified = 1');
+    $sol_map = [];
+    foreach ($sol_stmt->fetchAll() as $sol) {
+        if (!isset($sol_map[$sol['game_id']])) $sol_map[$sol['game_id']] = $sol['time_to_solution'];
+    }
+
+    $hotspots = [];
+    foreach ($buckets as $key => $sigs) {
+        [$gid, $plat, $cat] = explode('|', $key);
+        $max_sev = max(array_column($sigs, 'severity'));
+        $total_vol = array_sum(array_column($sigs, 'volume'));
+        $max_psi = max(array_column($sigs, 'psi'));
+        $max_trend = max(array_column($sigs, 'trend_score'));
+
+        // Find newest
+        usort($sigs, fn($a,$b) => strtotime($b['created_at']) - strtotime($a['created_at']));
+        $newest = $sigs[0];
+        $decay = calculate_decay($newest['created_at']);
+        $adj_psi = min(100, $max_psi * $decay);
+
+        $movement = $max_trend > 200 ? 'climbing' : ($max_trend < 50 ? 'dropping' : 'stable');
+        $summary = $newest['summary'] ?: "Live friction detected in {$gid}";
+        $has_fix = isset($sol_map[$gid]);
+        $fix_time = $has_fix ? (intdiv($sol_map[$gid], 60) . 'm ' . ($sol_map[$gid] % 60) . 's') : null;
+        $trend_val = max(0, $max_trend + mt_rand(-20, 40));
+
+        $hotspots[] = [
+            'game_id'           => $gid,
+            'game_name'         => $games[$gid] ?? $gid,
+            'platform'          => $plat,
+            'category'          => $cat,
+            'summary'           => $summary,
+            'trend'             => '+' . round($trend_val) . '%',
+            'severity'          => round($max_sev, 1),
+            'severity_movement' => $movement,
+            'heat_level'        => get_heat_level($max_sev, $adj_psi),
+            'verified_fix'      => $has_fix,
+            'time_to_solution'  => $fix_time,
+            'players_affected'  => $total_vol,
+            'psi'               => round($adj_psi, 1),
+            'timestamp'         => gmdate('Y-m-d\TH:i:s\Z'),
+            'confidence_score'  => 0.3,
+        ];
+    }
+    usort($hotspots, fn($a,$b) => $b['psi'] <=> $a['psi']);
+    return array_slice($hotspots, 0, $limit);
+}
+
+// ==================== WEBHOOK DISPATCH ====================
+
+function dispatch_webhook(PDO $db, string $event_type, array $data): void {
+    $stmt = $db->prepare('SELECT * FROM webhooks WHERE active = 1');
+    $stmt->execute();
+    $hooks = $stmt->fetchAll();
+
+    foreach ($hooks as $wh) {
+        $events = json_decode($wh['events'], true) ?: [];
+        if (!in_array($event_type, $events) && !in_array('*', $events)) continue;
+
+        $payload = json_encode([
+            'event'              => $event_type,
+            'timestamp'          => gmdate('Y-m-d\TH:i:s\Z'),
+            'data'               => $data,
+            'protocol_version'   => '0.4a',
+        ]);
+        $sig = hash_hmac('sha256', $payload, $wh['secret']);
+        $dlv_id = gen_id('dlv');
+
+        // Log delivery attempt
+        $db->prepare('INSERT INTO webhook_deliveries (delivery_id, webhook_id, event_type, payload, status) VALUES (?,?,?,?,?)')
+           ->execute([$dlv_id, $wh['webhook_id'], $event_type, $payload, 'pending']);
+
+        // Fire-and-forget cURL
+        $ch = curl_init($wh['endpoint_url']);
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $payload,
+            CURLOPT_HTTPHEADER     => [
+                'Content-Type: application/json',
+                "X-Grip-Signature: sha256={$sig}",
+                "X-Grip-Event: {$event_type}",
+                "X-Grip-Delivery: {$dlv_id}",
+                'User-Agent: Grip-Protocol-Webhook/0.4a',
+            ],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 10,
+        ]);
+        $resp = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($code >= 200 && $code < 400) {
+            $db->prepare('UPDATE webhook_deliveries SET status = "delivered", response_code = ?, delivered_at = NOW() WHERE delivery_id = ?')
+               ->execute([$code, $dlv_id]);
+            $db->prepare('UPDATE webhooks SET last_delivered_at = NOW(), failure_count = 0 WHERE webhook_id = ?')
+               ->execute([$wh['webhook_id']]);
+        } else {
+            $db->prepare('UPDATE webhook_deliveries SET status = "failed", response_code = ? WHERE delivery_id = ?')
+               ->execute([$code ?: null, $dlv_id]);
+            $db->prepare('UPDATE webhooks SET failure_count = failure_count + 1 WHERE webhook_id = ?')
+               ->execute([$wh['webhook_id']]);
+            // Auto-disable after 5 consecutive failures
+            $db->prepare('UPDATE webhooks SET active = 0 WHERE webhook_id = ? AND failure_count >= 5')
+               ->execute([$wh['webhook_id']]);
+        }
+    }
+}
+
+// ==================== HARDWARE PROFILES ====================
+
+function get_hardware_profiles(): array {
+    return [
+        'steam_deck_oled' => ['name'=>'Steam Deck OLED','thermal_limit'=>85,'default_tdp'=>15,'max_tdp'=>15,'vram'=>16],
+        'steam_deck_lcd'  => ['name'=>'Steam Deck LCD','thermal_limit'=>85,'default_tdp'=>15,'max_tdp'=>15,'vram'=>16],
+        'rog_ally'        => ['name'=>'ROG Ally','thermal_limit'=>90,'default_tdp'=>25,'max_tdp'=>30,'vram'=>16],
+        'rog_ally_x'      => ['name'=>'ROG Ally X','thermal_limit'=>90,'default_tdp'=>25,'max_tdp'=>30,'vram'=>24],
+        'legion_go'       => ['name'=>'Legion Go','thermal_limit'=>88,'default_tdp'=>25,'max_tdp'=>30,'vram'=>16],
+        'ps5'             => ['name'=>'PlayStation 5','thermal_limit'=>80,'default_tdp'=>120,'max_tdp'=>120,'vram'=>16],
+        'xbox_series_x'   => ['name'=>'Xbox Series X','thermal_limit'=>80,'default_tdp'=>120,'max_tdp'=>120,'vram'=>16],
+        'pc'              => ['name'=>'PC','thermal_limit'=>95,'default_tdp'=>200,'max_tdp'=>400,'vram'=>24],
+    ];
+}
+
+// ==================== GAME REGISTRY HELPERS ====================
+
+/**
+ * Format a game_registry row for JSON output.
+ */
+function format_game_response(array $game): array {
+    return [
+        'game_id'                => $game['game_id'],
+        'name'                   => $game['name'],
+        'slug'                   => $game['slug'],
+        'genre'                  => $game['genre'],
+        'genre_secondary'        => $game['genre_secondary'],
+        'platforms'              => json_decode($game['platforms'], true) ?: [],
+        'tracking_status'        => $game['tracking_status'],
+        'default_friction_types' => json_decode($game['default_friction_types'], true) ?: [],
+        'developer'              => $game['developer'],
+        'publisher'              => $game['publisher'],
+        'steam_app_id'           => $game['steam_app_id'] ? (int)$game['steam_app_id'] : null,
+        'igdb_id'                => $game['igdb_id'] ? (int)$game['igdb_id'] : null,
+        'rawg_id'                => $game['rawg_id'] ? (int)$game['rawg_id'] : null,
+        'total_signals'          => (int)$game['total_signals'],
+        'peak_psi'               => (float)$game['peak_psi'],
+        'first_signal_at'        => $game['first_signal_at'],
+        'last_signal_at'         => $game['last_signal_at'],
+        'created_at'             => $game['created_at'],
+        'updated_at'             => $game['updated_at'],
+    ];
+}
+
+/**
+ * Fuzzy resolve a game reference string to canonical game_id.
+ * Uses: 1) exact alias match, 2) fuzzy match against aliases + game names.
+ * PHP similar_text + levenshtein scoring (replaces thefuzz/python-Levenshtein).
+ */
+function resolve_game_reference(PDO $db, string $query): array {
+    $query_lower = strtolower(trim($query));
+
+    // 1. Exact alias match
+    $stmt = $db->prepare('SELECT alias, game_id, confidence FROM game_aliases WHERE alias = ?');
+    $stmt->execute([$query_lower]);
+    $alias = $stmt->fetch();
+    if ($alias) {
+        $g = $db->prepare('SELECT * FROM game_registry WHERE game_id = ?');
+        $g->execute([$alias['game_id']]);
+        $game = $g->fetch();
+        if ($game) {
+            return [
+                'game_id' => $game['game_id'], 'name' => $game['name'],
+                'confidence' => 1.0, 'matched_alias' => $query_lower, 'suggestions' => [],
+            ];
+        }
+    }
+
+    // 2. Build candidate list: all aliases + all game names
+    $candidates = [];
+
+    $aliases_all = $db->query('SELECT alias, game_id FROM game_aliases')->fetchAll();
+    foreach ($aliases_all as $a) {
+        $candidates[$a['alias']] = $a['game_id'];
+    }
+
+    $games_all = $db->query("SELECT game_id, name FROM game_registry WHERE tracking_status IN ('active','pending')")->fetchAll();
+    foreach ($games_all as $g) {
+        $key = strtolower($g['name']);
+        if (!isset($candidates[$key])) $candidates[$key] = $g['game_id'];
+    }
+
+    // 3. Score each candidate using token_sort_ratio equivalent
+    $scores = [];
+    foreach ($candidates as $candidate_name => $game_id) {
+        $score = fuzzy_token_sort_ratio($query_lower, $candidate_name);
+        $scores[] = ['name' => $candidate_name, 'game_id' => $game_id, 'score' => $score];
+    }
+
+    // Sort by score descending
+    usort($scores, fn($a, $b) => $b['score'] <=> $a['score']);
+
+    if (empty($scores)) {
+        return ['game_id' => null, 'name' => null, 'confidence' => 0.0, 'matched_alias' => null, 'suggestions' => []];
+    }
+
+    $best = $scores[0];
+    $best_game = null;
+    if ($best['game_id']) {
+        $g = $db->prepare('SELECT * FROM game_registry WHERE game_id = ?');
+        $g->execute([$best['game_id']]);
+        $best_game = $g->fetch();
+    }
+
+    // Build suggestions (top 3)
+    $suggestions = [];
+    $seen_ids = [];
+    foreach (array_slice($scores, 0, 5) as $s) {
+        if (in_array($s['game_id'], $seen_ids)) continue;
+        $seen_ids[] = $s['game_id'];
+        $g = $db->prepare('SELECT game_id, name FROM game_registry WHERE game_id = ?');
+        $g->execute([$s['game_id']]);
+        $sg = $g->fetch();
+        if ($sg) {
+            $suggestions[] = [
+                'game_id' => $sg['game_id'], 'name' => $sg['name'],
+                'confidence' => round($s['score'] / 100, 2), 'matched' => $s['name'],
+            ];
+        }
+        if (count($suggestions) >= 3) break;
+    }
+
+    $confidence = round($best['score'] / 100, 2);
+    $threshold = 0.75;
+
+    // Check if the best match was an alias
+    $matched_alias = null;
+    foreach ($aliases_all as $a) {
+        if ($a['alias'] === $best['name']) { $matched_alias = $best['name']; break; }
+    }
+
+    return [
+        'game_id'       => ($best_game && $confidence >= $threshold) ? $best_game['game_id'] : null,
+        'name'          => $best_game ? $best_game['name'] : null,
+        'confidence'    => $confidence,
+        'matched_alias' => $matched_alias,
+        'suggestions'   => $suggestions,
+    ];
+}
+
+/**
+ * Token sort ratio — PHP equivalent of thefuzz.fuzz.token_sort_ratio.
+ * Tokenizes both strings, sorts tokens, then uses similar_text percentage.
+ */
+function fuzzy_token_sort_ratio(string $a, string $b): float {
+    $sort_tokens = function(string $s): string {
+        $tokens = preg_split('/[\s\-_:]+/', strtolower(trim($s)));
+        sort($tokens);
+        return implode(' ', array_filter($tokens));
+    };
+
+    $sa = $sort_tokens($a);
+    $sb = $sort_tokens($b);
+
+    if ($sa === $sb) return 100.0;
+
+    // similar_text percentage
+    similar_text($sa, $sb, $pct);
+
+    // Also try levenshtein for short strings (better for typos)
+    $max_len = max(strlen($sa), strlen($sb));
+    if ($max_len <= 255 && $max_len > 0) {
+        $lev = levenshtein($sa, $sb);
+        $lev_score = (1 - $lev / $max_len) * 100;
+        $pct = max($pct, $lev_score); // Take the better score
+    }
+
+    return round($pct, 1);
+}
+
+// ==================== ROUTING ====================
+
+$uri    = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$method = $_SERVER['REQUEST_METHOD'];
+
+switch (true) {
+
+    // ===== PUBLIC =====
+
+    // GET /health
+    case $method === 'GET' && preg_match('#^/health$#', $uri):
+        json_out([
+            'status'    => 'ok',
+            'service'   => 'Grip Protocol',
+            'timestamp' => gmdate('Y-m-d\TH:i:s\Z'),
+            'layer'     => 'trust',
+            'version'   => '0.4a',
+        ]);
+
+    // POST /v1/auth/register (public — creates a key)
+    case $method === 'POST' && preg_match('#^/v1/auth/register$#', $uri):
+        $body = json_body();
+        if (!$body || empty($body['owner_email'])) error_out('Missing required field: owner_email', 422);
+        $valid_types = ['studio','creator','admin'];
+        $valid_tiers = ['free','pro','enterprise'];
+        $owner_type = in_array($body['owner_type'] ?? 'creator', $valid_types) ? ($body['owner_type'] ?? 'creator') : 'creator';
+        $tier = in_array($body['rate_limit_tier'] ?? 'free', $valid_tiers) ? ($body['rate_limit_tier'] ?? 'free') : 'free';
+        $scopes = $body['scopes'] ?? ['read:hotspots'];
+
+        [$kid, $raw, $hash] = generate_api_key();
+        $db = get_db();
+        $db->prepare('INSERT INTO api_keys (key_id, key_hash, owner_email, owner_type, scopes, rate_limit_tier, active, created_at) VALUES (?,?,?,?,?,?,1,NOW())')
+           ->execute([$kid, $hash, $body['owner_email'], $owner_type, json_encode($scopes), $tier]);
+
+        // Notify Sean of new API key registration
+        $notify_to      = 'hello@gamegrip.cloud';
+        $notify_subject = 'Grip Protocol — New API Key Registered';
+        $notify_body    = "New API key registration:\n\n"
+            . "Email:  {$body['owner_email']}\n"
+            . "Type:   {$owner_type}\n"
+            . "Tier:   {$tier}\n"
+            . "Key ID: {$kid}\n"
+            . "Scopes: " . implode(', ', $scopes) . "\n"
+            . "Time:   " . gmdate('Y-m-d H:i:s') . " UTC\n";
+        $notify_headers  = "From: Grip Protocol <noreply@gamegrip.cloud>\r\n"
+            . "Reply-To: noreply@gamegrip.cloud\r\n"
+            . "X-Mailer: GripProtocol/0.4d";
+        @mail($notify_to, $notify_subject, $notify_body, $notify_headers);
+
+        json_out([
+            'key_id'          => $kid,
+            'api_key'         => $raw,
+            'owner_email'     => $body['owner_email'],
+            'owner_type'      => $owner_type,
+            'scopes'          => $scopes,
+            'rate_limit_tier' => $tier,
+            'active'          => true,
+            'created_at'      => gmdate('Y-m-d\TH:i:s\Z'),
+        ], 201);
+
+    // GET /v1/auth/me
+    case $method === 'GET' && preg_match('#^/v1/auth/me$#', $uri):
+        $key = validate_api_key();
+        json_out([
+            'key_id'          => $key['key_id'],
+            'owner_email'     => $key['owner_email'],
+            'owner_type'      => $key['owner_type'],
+            'scopes'          => json_decode($key['scopes'], true),
+            'rate_limit_tier' => $key['rate_limit_tier'],
+            'active'          => (bool)$key['active'],
+            'request_count'   => (int)$key['request_count'],
+            'created_at'      => $key['created_at'],
+            'last_used_at'    => $key['last_used_at'],
+        ]);
+
+    // POST /v1/auth/rotate
+    case $method === 'POST' && preg_match('#^/v1/auth/rotate$#', $uri):
+        $key = validate_api_key();
+        [, $new_raw, $new_hash] = generate_api_key();
+        $db = get_db();
+        $db->prepare('UPDATE api_keys SET key_hash = ?, request_count = 0 WHERE key_id = ?')
+           ->execute([$new_hash, $key['key_id']]);
+        json_out(['key_id' => $key['key_id'], 'new_api_key' => $new_raw]);
+
+    // DELETE /v1/auth/revoke
+    case $method === 'DELETE' && preg_match('#^/v1/auth/revoke$#', $uri):
+        $key = validate_api_key();
+        $db = get_db();
+        $db->prepare('UPDATE api_keys SET active = 0 WHERE key_id = ?')->execute([$key['key_id']]);
+        json_out(['status' => 'revoked', 'key_id' => $key['key_id'], 'message' => 'API key has been permanently revoked']);
+
+    // ===== CORE ENDPOINTS (authed + rate limited) =====
+
+    // GET /v1/status (public — works without key)
+    case $method === 'GET' && preg_match('#^/v1/status$#', $uri):
+        $key = optional_auth_and_rate_limit();
+        $db = get_db();
+        $hotspots = generate_hotspots($db, 50);
+        $avg_psi = count($hotspots) ? round(array_sum(array_column($hotspots, 'psi')) / count($hotspots), 1) : 0;
+        $total_sig = (int)$db->query('SELECT COUNT(*) FROM friction_signals')->fetchColumn();
+        $total_raw = (int)$db->query('SELECT COUNT(*) FROM raw_events')->fetchColumn();
+        $total_keys = (int)$db->query('SELECT COUNT(*) FROM api_keys WHERE active = 1')->fetchColumn();
+        $active_wh = (int)$db->query('SELECT COUNT(*) FROM webhooks WHERE active = 1')->fetchColumn();
+
+        json_out([
+            'status'                 => 'gripping',
+            'version'                => '0.4a',
+            'service'                => 'grip-protocol-api',
+            'uptime_seconds'         => time() - strtotime('2026-05-21 00:00:00'),
+            'active_incidents'       => count($hotspots),
+            'avg_psi'                => $avg_psi,
+            'total_signals_ingested' => $total_sig,
+            'total_raw_events'       => $total_raw,
+            'total_api_keys'         => $total_keys,
+            'active_webhooks'        => $active_wh,
+        ]);
+
+    // GET /v1/live/hotspots (public — works without key)
+    case $method === 'GET' && preg_match('#^/v1/live/hotspots$#', $uri):
+        $key = optional_auth_and_rate_limit();
+        $limit = max(1, min(50, intval($_GET['limit'] ?? 10)));
+        $db = get_db();
+        json_out(generate_hotspots($db, $limit));
+
+    // GET /v1/signals/active
+    case $method === 'GET' && preg_match('#^/v1/signals/active$#', $uri):
+        $key = validate_api_key();
+        check_scope($key, 'read:signals');
+        $db = get_db();
+        $signals = $db->query('SELECT signal_id, game_id, platform, friction_type, severity, signal_score, psi, volume, created_at FROM friction_signals WHERE active = 1')->fetchAll();
+        json_out($signals);
+
+    // POST /v1/friction/scan
+    case $method === 'POST' && preg_match('#^/v1/friction/scan$#', $uri):
+        $key = auth_and_rate_limit();
+        $body = json_body();
+        if (!$body || empty($body['game']) || empty($body['issue'])) error_out('Missing required fields: game, issue', 422);
+
+        $gid = strtolower(str_replace(' ', '-', $body['game']));
+        $db = get_db();
+        $game = $db->prepare('SELECT * FROM games WHERE id = ?');
+        $game->execute([$gid]);
+        if (!$game->fetch()) error_out("Game '{$body['game']}' not in friction database", 404);
+
+        [$cat, $sev, $causes] = classify_issue(strtolower($body['issue']));
+
+        // Match solutions
+        $sol_stmt = $db->prepare('SELECT * FROM solutions WHERE game_id = ?');
+        $sol_stmt->execute([$gid]);
+        $sols = $sol_stmt->fetchAll();
+        $fixes = [];
+        foreach ($sols as $sol) {
+            $kws = json_decode($sol['problem_keywords'], true) ?: [];
+            foreach ($kws as $kw) {
+                if (stripos($body['issue'], $kw) !== false) {
+                    $fixes[] = [
+                        'title' => $sol['title'],
+                        'steps' => json_decode($sol['steps'], true),
+                        'time_to_solution' => intdiv($sol['time_to_solution'], 60) . 'm ' . ($sol['time_to_solution'] % 60) . 's',
+                        'verified' => (bool)$sol['verified'],
+                    ];
+                    break;
+                }
+            }
+        }
+        if (!$fixes) $fixes = [['title' => 'No verified fix yet', 'steps' => ['Check game forums', 'Report to developer'], 'time_to_solution' => 'Unknown', 'verified' => false]];
+
+        $psi = calculate_psi($sev, 1);
+        $conf = array_filter($fixes, fn($f) => $f['verified']) ? 0.7 : 0.4;
+
+        json_out([
+            'friction_score'    => round($sev, 1),
+            'category'          => $cat,
+            'probable_causes'   => array_slice($causes, 0, 3),
+            'recommended_fixes' => array_slice($fixes, 0, 3),
+            'psi'               => $psi,
+            'confidence_score'  => round($conf, 2),
+        ]);
+
+    // POST /v1/solve
+    case $method === 'POST' && preg_match('#^/v1/solve$#', $uri):
+        $key = auth_and_rate_limit();
+        $body = json_body();
+        if (!$body || empty($body['game']) || empty($body['problem'])) error_out('Missing required fields: game, problem', 422);
+
+        $gid = strtolower(str_replace(' ', '-', $body['game']));
+        $db = get_db();
+        $game = $db->prepare('SELECT * FROM games WHERE id = ?');
+        $game->execute([$gid]);
+        if (!$game->fetch()) error_out("Game '{$body['game']}' not found", 404);
+
+        $sol_stmt = $db->prepare('SELECT * FROM solutions WHERE game_id = ?');
+        $sol_stmt->execute([$gid]);
+        $sols = $sol_stmt->fetchAll();
+        $matches = [];
+        foreach ($sols as $sol) {
+            $kws = json_decode($sol['problem_keywords'], true) ?: [];
+            $score = 0;
+            foreach ($kws as $kw) {
+                if (stripos($body['problem'], $kw) !== false) $score++;
+            }
+            if ($score > 0) $matches[] = [$score, $sol];
+        }
+        usort($matches, fn($a,$b) => $b[0] <=> $a[0]);
+
+        $fixes = [];
+        $total_time = 0;
+        foreach (array_slice($matches, 0, 3) as [$sc, $sol]) {
+            $fixes[] = [
+                'title'            => $sol['title'],
+                'steps'            => json_decode($sol['steps'], true),
+                'time_to_solution' => intdiv($sol['time_to_solution'], 60) . 'm ' . ($sol['time_to_solution'] % 60) . 's',
+                'verified'         => (bool)$sol['verified'],
+                'build'            => $sol['build_type'],
+                'weapon'           => $sol['weapon'],
+            ];
+            $total_time += $sol['time_to_solution'];
+        }
+        if (!$fixes) {
+            $fixes[] = ['title' => 'Community help requested', 'steps' => ['Post on Grip Protocol forums', 'Attach screenshot/video', 'Tag verified creators'], 'time_to_solution' => 'Unknown', 'verified' => false, 'build' => null, 'weapon' => null];
+            $total_time = 9999;
+        }
+
+        $est_min = max(1, intdiv($total_time, 60));
+        $psi_impact = calculate_psi(7.5, 1000);
+        $conf = ($matches && $matches[0][0] >= 2) ? 0.85 : 0.5;
+
+        json_out([
+            'fixes'            => $fixes,
+            'estimated_time'   => "{$est_min} mins",
+            'verified'         => count(array_filter($fixes, fn($f) => $f['verified'] ?? false)) === count($fixes),
+            'psi_impact'       => $psi_impact,
+            'confidence_score' => round($conf, 2),
+        ]);
+
+    // POST /v1/device/optimize
+    case $method === 'POST' && preg_match('#^/v1/device/optimize$#', $uri):
+        $key = auth_and_rate_limit();
+        $body = json_body();
+        if (!$body || empty($body['device']) || empty($body['game'])) error_out('Missing required fields: device, game', 422);
+
+        $did = strtolower(str_replace(' ', '_', $body['device']));
+        $gid = strtolower(str_replace(' ', '-', $body['game']));
+        $priority = $body['priority'] ?? 'balanced';
+        $profiles = get_hardware_profiles();
+
+        $profile = $profiles[$did] ?? null;
+        if (!$profile) {
+            foreach ($profiles as $id => $p) {
+                if (str_contains($did, $id) || str_contains($id, $did)) { $profile = $p; break; }
+            }
+        }
+        if (!$profile) error_out("Device '{$body['device']}' not found. Available: " . implode(', ', array_keys($profiles)), 404);
+
+        $heavy = ['cyberpunk-2077','baldurs-gate-3','starfield','elden-ring'];
+        $light = ['minecraft','hades-2'];
+
+        switch ($priority) {
+            case 'battery':
+                $tdp = max(7, $profile['default_tdp'] - 8); $fps = 30; $bf = 2.8;
+                $scaling = 'FSR 2.1 Ultra Performance'; $vsync = 'On'; break;
+            case 'performance':
+                $tdp = $profile['max_tdp']; $fps = 60; $bf = 1.2;
+                $scaling = 'FSR 2.1 Quality'; $vsync = 'Off'; break;
+            default:
+                $tdp = $profile['default_tdp']; $fps = 40; $bf = 2.0;
+                $scaling = 'FSR 2.1 Balanced'; $vsync = 'Adaptive';
+        }
+        if (in_array($gid, $heavy)) { $fps = max(30, $fps - 10); $tdp = max($tdp - 2, 7); }
+        elseif (in_array($gid, $light)) { $fps = min(60, $fps + 10); $tdp = max($tdp - 5, 7); }
+
+        $eh = ($profile['vram'] / 16) * $bf * (15 / max($tdp, 1));
+        $h = intval($eh); $m = intval(($eh - $h) * 60);
+
+        json_out([
+            'fps_cap'           => $fps,
+            'tdp'               => $tdp,
+            'estimated_battery' => "{$h}h {$m}m",
+            'settings'          => [
+                ['setting' => 'TDP Limit', 'value' => "{$tdp}W"],
+                ['setting' => 'FPS Cap', 'value' => (string)$fps],
+                ['setting' => 'GPU Clock', 'value' => $priority === 'balanced' ? 'Auto' : 'Fixed'],
+                ['setting' => 'Upscaling', 'value' => $scaling],
+                ['setting' => 'VSync', 'value' => $vsync],
+            ],
+        ]);
+
+    // POST /v1/events/ingest
+    case $method === 'POST' && preg_match('#^/v1/events/ingest$#', $uri):
+        $key = validate_api_key();
+        check_scope($key, 'ingest');
+        $body = json_body();
+        if (!$body || !isset($body['source'], $body['signal'], $body['metrics'])) error_out('Invalid ingest payload', 422);
+
+        $start = microtime(true);
+        $eid = gen_id('evt');
+        $sid = gen_id('sig');
+
+        $signal_score = calculate_signal_score($body);
+        $psi = calculate_psi($signal_score, $body['metrics']['volume'], $body['metrics']['velocity']);
+
+        $source_weights = ['manual_moderator_report'=>1.0,'crash_report_aggregator'=>0.95,'steam_review_spike'=>0.8,'reddit_keyword_burst'=>0.6,'discord_complaint_cluster'=>0.5,'simulated_synthetic'=>0.3];
+        $sw = $source_weights[$body['source']['type']] ?? 0.4;
+        $conf = round($sw * $body['source']['confidence'], 2);
+
+        $db = get_db();
+
+        // Store raw event
+        $db->prepare('INSERT INTO raw_events (event_id, source_type, source_confidence, raw_url, game_id, platform, friction_type, severity_estimate, summary, keywords, language, region, volume, velocity, sentiment, patch_version, hardware_context, time_since_release_hours, processed, processing_score, created_hotspot_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)')
+           ->execute([
+               $eid, $body['source']['type'], $body['source']['confidence'], $body['source']['raw_url'] ?? null,
+               $body['signal']['game_id'], $body['signal']['platform'], $body['signal']['friction_type'],
+               (float)$body['signal']['severity_estimate'], $body['signal']['summary'],
+               json_encode($body['signal']['keywords'] ?? []), $body['signal']['language'] ?? 'en', $body['signal']['region'] ?? 'global',
+               $body['metrics']['volume'], $body['metrics']['velocity'], $body['metrics']['sentiment'],
+               $body['context']['patch_version'] ?? null, json_encode($body['context']['hardware_context'] ?? []),
+               $body['context']['time_since_release_hours'] ?? null, $signal_score, $sid
+           ]);
+
+        // Store friction signal
+        $expires = date('Y-m-d H:i:s', strtotime('+24 hours'));
+        $db->prepare('INSERT INTO friction_signals (signal_id, event_id, game_id, platform, friction_type, severity, signal_score, psi, trend_score, volume, summary, active, created_at, expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,1,NOW(),?)')
+           ->execute([
+               $sid, $eid, $body['signal']['game_id'], $body['signal']['platform'],
+               $body['signal']['friction_type'], (float)$body['signal']['severity_estimate'],
+               $signal_score, $psi, $body['metrics']['velocity'], $body['metrics']['volume'],
+               $body['signal']['summary'], $expires
+           ]);
+
+        $proc_ms = intval((microtime(true) - $start) * 1000);
+
+        // Trigger webhooks for high-PSI events
+        if ($psi >= 60) {
+            try {
+                dispatch_webhook($db, $psi >= 80 ? 'psi.spike' : 'hotspot.created', [
+                    'game_id'       => $body['signal']['game_id'],
+                    'platform'      => $body['signal']['platform'],
+                    'friction_type' => $body['signal']['friction_type'],
+                    'psi'           => $psi,
+                    'severity'      => (float)$body['signal']['severity_estimate'],
+                    'summary'       => $body['signal']['summary'],
+                    'event_id'      => $eid,
+                ]);
+            } catch (Exception $e) { /* Don't fail ingest */ }
+        }
+
+        json_out([
+            'event_id'            => $eid,
+            'status'              => 'accepted',
+            'signal_score'        => $signal_score,
+            'psi_contribution'    => $psi,
+            'hotspot_created'     => true,
+            'processing_time_ms'  => $proc_ms,
+            'confidence_score'    => $conf,
+        ]);
+
+    // POST /v1/dev/friction
+    case $method === 'POST' && preg_match('#^/v1/dev/friction$#', $uri):
+        $key = auth_and_rate_limit();
+        $body = json_body();
+        if (!$body || empty($body['game']) || empty($body['player_id']) || empty($body['event_type']) || empty($body['location']))
+            error_out('Missing required fields: game, player_id, event_type, location', 422);
+
+        $gid = strtolower(str_replace(' ', '-', $body['game']));
+        $db = get_db();
+        $game = $db->prepare('SELECT * FROM games WHERE id = ?');
+        $game->execute([$gid]);
+        if (!$game->fetch()) error_out("Game '{$body['game']}' not registered", 404);
+
+        $db->prepare('INSERT INTO dev_telemetry (game_id, player_id, event_type, location, retry_count) VALUES (?,?,?,?,?)')
+           ->execute([$gid, $body['player_id'], $body['event_type'], $body['location'], $body['retry_count'] ?? 0]);
+
+        // Analyze last 24h
+        $cutoff = date('Y-m-d H:i:s', strtotime('-24 hours'));
+        $stmt = $db->prepare('SELECT * FROM dev_telemetry WHERE game_id = ? AND timestamp >= ?');
+        $stmt->execute([$gid, $cutoff]);
+        $recent = $stmt->fetchAll();
+
+        $locstats = [];
+        foreach ($recent as $t) {
+            $loc = $t['location'];
+            if (!isset($locstats[$loc])) $locstats[$loc] = ['deaths'=>0,'stuck'=>0,'retries'=>0,'quits'=>0,'total'=>0];
+            $locstats[$loc]['total']++;
+            match($t['event_type']) {
+                'death' => $locstats[$loc]['deaths']++,
+                'stuck' => $locstats[$loc]['stuck']++,
+                'retry' => $locstats[$loc]['retries'] += $t['retry_count'],
+                'quit'  => $locstats[$loc]['quits']++,
+                default => null,
+            };
+        }
+        arsort($locstats);
+
+        $heatmap = [];
+        $alert = null;
+        $max_psi = 0;
+        $i = 0;
+        foreach ($locstats as $loc => $stats) {
+            if ($i++ >= 5) break;
+            $intensity = min(10.0, $stats['total'] / 10.0);
+            $avg_retries = round($stats['retries'] / max($stats['total'], 1), 1);
+            $quit_rate = round($stats['quits'] / max($stats['total'], 1) * 100, 1);
+            $zone_psi = calculate_psi($intensity, $stats['total']);
+            if ($zone_psi > $max_psi) $max_psi = $zone_psi;
+
+            $heatmap[] = [
+                'location'    => $loc,
+                'intensity'   => round($intensity, 1),
+                'deaths'      => $stats['deaths'],
+                'avg_retries' => $avg_retries,
+                'quit_rate'   => $quit_rate,
+                'zone_psi'    => $zone_psi,
+            ];
+            if ($intensity > 8.0 && !$alert) {
+                $alert = "CRITICAL: '{$loc}' showing extreme friction ({$intensity}/10). Avg retries: {$avg_retries}. Recommend immediate designer review.";
+            }
+        }
+
+        json_out([
+            'friction_heatmap' => $heatmap,
+            'alert'            => $alert,
+            'psi_zone'         => $max_psi > 0 ? round($max_psi, 1) : null,
+        ]);
+
+    // ===== WEBHOOKS =====
+
+    // POST /v1/webhooks
+    case $method === 'POST' && preg_match('#^/v1/webhooks$#', $uri):
+        $key = validate_api_key();
+        check_scope($key, 'webhooks:manage');
+        $body = json_body();
+        if (!$body || empty($body['endpoint_url'])) error_out('Missing required field: endpoint_url', 422);
+
+        $whid = 'whk_' . bin2hex(random_bytes(8));
+        $secret = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+        $events = $body['events'] ?? ['hotspot.created'];
+
+        $db = get_db();
+        $db->prepare('INSERT INTO webhooks (webhook_id, api_key_id, endpoint_url, events, secret, active, created_at) VALUES (?,?,?,?,?,1,NOW())')
+           ->execute([$whid, $key['key_id'], $body['endpoint_url'], json_encode($events), $secret]);
+
+        json_out([
+            'webhook_id'       => $whid,
+            'endpoint_url'     => $body['endpoint_url'],
+            'events'           => $events,
+            'secret'           => $secret,
+            'active'           => true,
+            'failure_count'    => 0,
+            'created_at'       => gmdate('Y-m-d\TH:i:s\Z'),
+            'last_delivered_at' => null,
+        ], 201);
+
+    // GET /v1/webhooks
+    case $method === 'GET' && preg_match('#^/v1/webhooks$#', $uri):
+        $key = validate_api_key();
+        $db = get_db();
+        $stmt = $db->prepare('SELECT * FROM webhooks WHERE api_key_id = ?');
+        $stmt->execute([$key['key_id']]);
+        $hooks = $stmt->fetchAll();
+        $out = [];
+        foreach ($hooks as $wh) {
+            $out[] = [
+                'webhook_id'        => $wh['webhook_id'],
+                'endpoint_url'      => $wh['endpoint_url'],
+                'events'            => json_decode($wh['events'], true),
+                'active'            => (bool)$wh['active'],
+                'failure_count'     => (int)$wh['failure_count'],
+                'created_at'        => $wh['created_at'],
+                'last_delivered_at' => $wh['last_delivered_at'],
+            ];
+        }
+        json_out($out);
+
+    // DELETE /v1/webhooks/{id}
+    case $method === 'DELETE' && preg_match('#^/v1/webhooks/(whk_[a-f0-9]+)$#', $uri, $m):
+        $key = validate_api_key();
+        check_scope($key, 'webhooks:manage');
+        $db = get_db();
+        $stmt = $db->prepare('DELETE FROM webhooks WHERE webhook_id = ? AND api_key_id = ?');
+        $stmt->execute([$m[1], $key['key_id']]);
+        if ($stmt->rowCount() === 0) error_out('Webhook not found', 404);
+        json_out(['status' => 'deleted', 'webhook_id' => $m[1]]);
+
+    // POST /v1/webhooks/{id}/test
+    case $method === 'POST' && preg_match('#^/v1/webhooks/(whk_[a-f0-9]+)/test$#', $uri, $m):
+        $key = validate_api_key();
+        check_scope($key, 'webhooks:manage');
+        $db = get_db();
+        $stmt = $db->prepare('SELECT * FROM webhooks WHERE webhook_id = ? AND api_key_id = ?');
+        $stmt->execute([$m[1], $key['key_id']]);
+        $wh = $stmt->fetch();
+        if (!$wh) error_out('Webhook not found', 404);
+
+        $payload = json_encode([
+            'event'     => 'webhook.test',
+            'timestamp' => gmdate('Y-m-d\TH:i:s\Z'),
+            'data'      => ['message' => 'Test event from Grip Protocol', 'webhook_id' => $m[1]],
+            'protocol_version' => '0.4a',
+        ]);
+        $sig = hash_hmac('sha256', $payload, $wh['secret']);
+        $ch = curl_init($wh['endpoint_url']);
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true, CURLOPT_POSTFIELDS => $payload,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json', "X-Grip-Signature: sha256={$sig}", 'X-Grip-Event: webhook.test'],
+            CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10,
+        ]);
+        $resp = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($code >= 200 && $code < 400) {
+            json_out(['status' => 'delivered', 'webhook_id' => $m[1], 'message' => 'Test event delivered successfully']);
+        } else {
+            json_out(['status' => 'failed', 'webhook_id' => $m[1], 'message' => 'Test event failed. Check your endpoint.']);
+        }
+
+    // GET /v1/webhooks/{id}/deliveries
+    case $method === 'GET' && preg_match('#^/v1/webhooks/(whk_[a-f0-9]+)/deliveries$#', $uri, $m):
+        $key = validate_api_key();
+        $db = get_db();
+        // Verify ownership
+        $stmt = $db->prepare('SELECT webhook_id FROM webhooks WHERE webhook_id = ? AND api_key_id = ?');
+        $stmt->execute([$m[1], $key['key_id']]);
+        if (!$stmt->fetch()) error_out('Webhook not found', 404);
+
+        $limit = max(1, min(50, intval($_GET['limit'] ?? 20)));
+        $dlv = $db->prepare('SELECT delivery_id, event_type, status, response_code, delivered_at, created_at FROM webhook_deliveries WHERE webhook_id = ? ORDER BY created_at DESC LIMIT ?');
+        $dlv->bindValue(1, $m[1]);
+        $dlv->bindValue(2, $limit, PDO::PARAM_INT);
+        $dlv->execute();
+        json_out($dlv->fetchAll());
+
+    // ==================== GAME REGISTRY v0.4d ====================
+
+    // POST /v1/games — Create a game
+    case $method === 'POST' && $uri === '/v1/games':
+        $key = validate_api_key();
+        check_scope($key, 'admin');
+        $body = json_body();
+        if (!$body || empty($body['game_id']) || empty($body['name']) || empty($body['slug'])) {
+            error_out('game_id, name, and slug are required', 400);
+        }
+        $db = get_db();
+        $exists = $db->prepare('SELECT game_id FROM game_registry WHERE game_id = ?');
+        $exists->execute([$body['game_id']]);
+        if ($exists->fetch()) error_out("Game '{$body['game_id']}' already exists", 409);
+
+        $platforms = json_encode($body['platforms'] ?? []);
+        $friction  = json_encode($body['default_friction_types'] ?? []);
+
+        $db->prepare('INSERT INTO game_registry (game_id, name, slug, steam_app_id, igdb_id, rawg_id, genre, genre_secondary, developer, publisher, platforms, default_friction_types, tracking_status, tracking_started_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW(),NOW())')
+           ->execute([
+               $body['game_id'], $body['name'], $body['slug'],
+               $body['steam_app_id'] ?? null, $body['igdb_id'] ?? null, $body['rawg_id'] ?? null,
+               $body['genre'] ?? null, $body['genre_secondary'] ?? null,
+               $body['developer'] ?? null, $body['publisher'] ?? null,
+               $platforms, $friction, 'active'
+           ]);
+
+        // Auto-create aliases
+        $db->prepare('INSERT IGNORE INTO game_aliases (alias, game_id, source, confidence) VALUES (?,?,?,?)')
+           ->execute([strtolower($body['name']), $body['game_id'], 'manual', 1.0]);
+        $db->prepare('INSERT IGNORE INTO game_aliases (alias, game_id, source, confidence) VALUES (?,?,?,?)')
+           ->execute([strtolower($body['slug']), $body['game_id'], 'manual', 1.0]);
+
+        $game = $db->prepare('SELECT * FROM game_registry WHERE game_id = ?');
+        $game->execute([$body['game_id']]);
+        json_out(format_game_response($game->fetch()), 201);
+
+    // GET /v1/games/trending (public)
+    case $method === 'GET' && $uri === '/v1/games/trending':
+        $key = optional_auth_and_rate_limit();
+        $db = get_db();
+        $limit = max(1, min(50, intval($_GET['limit'] ?? 10)));
+        $stmt = $db->prepare('SELECT * FROM game_registry WHERE tracking_status = ? ORDER BY total_signals DESC, peak_psi DESC LIMIT ?');
+        $stmt->bindValue(1, 'active');
+        $stmt->bindValue(2, $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        $games = $stmt->fetchAll();
+        $result = [];
+        foreach ($games as $g) {
+            $trend = 'stable';
+            if ($g['last_signal_at']) {
+                $hours = (time() - strtotime($g['last_signal_at'])) / 3600;
+                if ($hours < 6) $trend = 'rising';
+                elseif ($hours > 48) $trend = 'falling';
+            }
+            $result[] = [
+                'game_id' => $g['game_id'], 'name' => $g['name'], 'genre' => $g['genre'],
+                'total_signals' => (int)$g['total_signals'], 'peak_psi' => (float)$g['peak_psi'],
+                'last_signal_at' => $g['last_signal_at'], 'trend_direction' => $trend,
+            ];
+        }
+        json_out($result);
+
+    // POST /v1/games/resolve — Fuzzy resolve game reference
+    case $method === 'POST' && $uri === '/v1/games/resolve':
+        $key = auth_and_rate_limit();
+        $body = json_body();
+        if (!$body || empty($body['query'])) error_out('query is required', 400);
+        json_out(resolve_game_reference(get_db(), $body['query']));
+
+    // POST /v1/games/discover — Auto-discover from signal
+    case $method === 'POST' && $uri === '/v1/games/discover':
+        $key = auth_and_rate_limit();
+        $body = json_body();
+        if (!$body || empty($body['raw_reference'])) error_out('raw_reference is required', 400);
+
+        $db = get_db();
+        $resolution = resolve_game_reference($db, $body['raw_reference']);
+
+        if ($resolution['confidence'] >= 0.90 && $resolution['game_id']) {
+            json_out([
+                'status' => 'existing', 'game_id' => $resolution['game_id'],
+                'name' => $resolution['name'], 'confidence' => $resolution['confidence'],
+                'queue_id' => null, 'message' => "Matched to existing game: {$resolution['name']}",
+            ]);
+        }
+
+        // No good match — queue for curation
+        $queue_id = 'dsc_' . bin2hex(random_bytes(6));
+        $suggested = ($resolution['confidence'] >= 0.75) ? $resolution['game_id'] : null;
+
+        $db->prepare('INSERT INTO discovery_queue (queue_id, raw_reference, suggested_game_id, confidence, status, source_signal_id, created_at) VALUES (?,?,?,?,?,?,NOW())')
+           ->execute([$queue_id, $body['raw_reference'], $suggested, $resolution['confidence'], 'pending', $body['source_signal_id'] ?? null]);
+
+        json_out([
+            'status' => 'queued', 'game_id' => $suggested,
+            'name' => $resolution['name'], 'confidence' => $resolution['confidence'],
+            'queue_id' => $queue_id,
+            'message' => "Game '{$body['raw_reference']}' queued for manual curation (confidence: {$resolution['confidence']})",
+        ]);
+
+    // GET /v1/games/{id}/platforms (public)
+    case $method === 'GET' && preg_match('#^/v1/games/([a-z0-9_-]+)/platforms$#', $uri, $m):
+        $key = optional_auth_and_rate_limit();
+        $db = get_db();
+        $stmt = $db->prepare('SELECT * FROM game_registry WHERE game_id = ?');
+        $stmt->execute([$m[1]]);
+        $game = $stmt->fetch();
+        if (!$game) error_out("Game '{$m[1]}' not found", 404);
+
+        $platforms = json_decode($game['platforms'], true) ?: [];
+        $hw_map = [
+            'pc' => ['pc'], 'ps5' => ['ps5'], 'xbox' => ['xbox_series_x'],
+            'switch' => ['switch_oled'], 'steam_deck_oled' => ['steam_deck_oled'],
+            'steam_deck_lcd' => ['steam_deck_lcd'], 'rog_ally' => ['rog_ally', 'rog_ally_x'],
+            'rog_ally_x' => ['rog_ally_x'], 'legion_go' => ['legion_go'],
+        ];
+        $platform_data = [];
+        foreach ($platforms as $p) {
+            $platform_data[$p] = [
+                'available' => true,
+                'hardware_profiles' => $hw_map[$p] ?? [],
+                'notes' => null,
+            ];
+        }
+        json_out(['game_id' => $m[1], 'name' => $game['name'], 'platforms' => $platform_data]);
+
+    // PATCH /v1/games/{id} — Update game
+    case $method === 'PATCH' && preg_match('#^/v1/games/([a-z0-9_-]+)$#', $uri, $m):
+        $key = validate_api_key();
+        check_scope($key, 'admin');
+        $db = get_db();
+        $stmt = $db->prepare('SELECT * FROM game_registry WHERE game_id = ?');
+        $stmt->execute([$m[1]]);
+        $game = $stmt->fetch();
+        if (!$game) error_out("Game '{$m[1]}' not found", 404);
+
+        $body = json_body();
+        if (!$body) error_out('Request body required', 400);
+
+        $sets = []; $vals = [];
+        if (isset($body['name']))    { $sets[] = 'name = ?'; $vals[] = $body['name']; }
+        if (isset($body['genre']))   { $sets[] = 'genre = ?'; $vals[] = $body['genre']; }
+        if (isset($body['platforms'])) { $sets[] = 'platforms = ?'; $vals[] = json_encode($body['platforms']); }
+        if (isset($body['tracking_status'])) {
+            if (!in_array($body['tracking_status'], ['pending','active','paused','deprecated']))
+                error_out('Invalid tracking_status', 400);
+            $sets[] = 'tracking_status = ?'; $vals[] = $body['tracking_status'];
+            if ($body['tracking_status'] === 'active' && !$game['tracking_started_at']) {
+                $sets[] = 'tracking_started_at = NOW()';
+            }
+        }
+        if (isset($body['default_friction_types'])) { $sets[] = 'default_friction_types = ?'; $vals[] = json_encode($body['default_friction_types']); }
+        if (isset($body['developer'])) { $sets[] = 'developer = ?'; $vals[] = $body['developer']; }
+        if (isset($body['publisher'])) { $sets[] = 'publisher = ?'; $vals[] = $body['publisher']; }
+
+        if (empty($sets)) error_out('No fields to update', 400);
+        $vals[] = $m[1];
+        $db->prepare('UPDATE game_registry SET ' . implode(', ', $sets) . ' WHERE game_id = ?')->execute($vals);
+
+        $stmt = $db->prepare('SELECT * FROM game_registry WHERE game_id = ?');
+        $stmt->execute([$m[1]]);
+        json_out(format_game_response($stmt->fetch()));
+
+    // GET /v1/games/{id} (public)
+    case $method === 'GET' && preg_match('#^/v1/games/([a-z0-9_-]+)$#', $uri, $m):
+        $key = optional_auth_and_rate_limit();
+        $db = get_db();
+        $stmt = $db->prepare('SELECT * FROM game_registry WHERE game_id = ?');
+        $stmt->execute([$m[1]]);
+        $game = $stmt->fetch();
+        if (!$game) error_out("Game '{$m[1]}' not found", 404);
+        json_out(format_game_response($game));
+
+    // GET /v1/games — Search/list games (public)
+    case $method === 'GET' && $uri === '/v1/games':
+        $key = optional_auth_and_rate_limit();
+        $db = get_db();
+        $where = []; $params = [];
+
+        if (!empty($_GET['genre'])) {
+            $where[] = '(genre = ? OR genre_secondary = ?)';
+            $params[] = $_GET['genre']; $params[] = $_GET['genre'];
+        }
+        if (!empty($_GET['platform'])) {
+            $where[] = 'platforms LIKE ?';
+            $params[] = '%"' . $_GET['platform'] . '"%';
+        }
+        if (!empty($_GET['tracking_status'])) {
+            $where[] = 'tracking_status = ?';
+            $params[] = $_GET['tracking_status'];
+        }
+        if (isset($_GET['min_signals'])) {
+            $where[] = 'total_signals >= ?';
+            $params[] = (int)$_GET['min_signals'];
+        }
+        if (!empty($_GET['search'])) {
+            $where[] = '(name LIKE ? OR game_id LIKE ? OR slug LIKE ?)';
+            $s = '%' . $_GET['search'] . '%';
+            $params[] = $s; $params[] = $s; $params[] = $s;
+        }
+
+        $sql = 'SELECT game_id, name, slug, genre, platforms, tracking_status FROM game_registry';
+        if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
+        $sql .= ' ORDER BY total_signals DESC';
+
+        $limit = max(1, min(500, intval($_GET['limit'] ?? 50)));
+        $offset = max(0, intval($_GET['offset'] ?? 0));
+        $sql .= " LIMIT {$limit} OFFSET {$offset}";
+
+        $stmt = $db->prepare($sql);
+        $stmt->execute($params);
+        $games = $stmt->fetchAll();
+        $result = [];
+        foreach ($games as $g) {
+            $result[] = [
+                'game_id' => $g['game_id'], 'name' => $g['name'], 'slug' => $g['slug'],
+                'genre' => $g['genre'],
+                'platforms' => json_decode($g['platforms'], true) ?: [],
+                'tracking_status' => $g['tracking_status'],
+            ];
+        }
+        json_out($result);
+
+    // POST /v1/admin/games/import/csv — Bulk CSV import
+    case $method === 'POST' && $uri === '/v1/admin/games/import/csv':
+        $key = validate_api_key();
+        check_scope($key, 'admin');
+
+        // Accept raw CSV in body
+        $csv_content = file_get_contents('php://input');
+        if (!$csv_content || strlen($csv_content) < 10) error_out('CSV content required in request body', 400);
+
+        $import_id = 'imp_' . bin2hex(random_bytes(4));
+        $db = get_db();
+        $lines = explode("\n", trim($csv_content));
+        $header = str_getcsv(array_shift($lines));
+
+        $processed = 0; $created = 0; $skipped = 0; $errors = [];
+
+        foreach ($lines as $line) {
+            if (empty(trim($line))) continue;
+            $processed++;
+            $row = str_getcsv($line);
+            if (count($row) < count($header)) { $skipped++; $errors[] = "Row {$processed}: column count mismatch"; continue; }
+            $data = array_combine($header, $row);
+            $gid = trim($data['game_id'] ?? '');
+            if (!$gid) { $skipped++; $errors[] = "Row {$processed}: missing game_id"; continue; }
+
+            $chk = $db->prepare('SELECT 1 FROM game_registry WHERE game_id = ?');
+            $chk->execute([$gid]);
+            if ($chk->fetch()) { $skipped++; continue; }
+
+            $platforms = json_encode(array_values(array_filter(array_map('trim', explode(',', $data['platforms'] ?? '')))));
+            $friction = json_encode(array_values(array_filter(array_map('trim', explode(',', $data['default_friction_types'] ?? '')))));
+
+            try {
+                $db->prepare('INSERT INTO game_registry (game_id, name, slug, genre, genre_secondary, developer, publisher, platforms, default_friction_types, tracking_status, tracking_started_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,NOW(),NOW(),NOW())')
+                   ->execute([$gid, trim($data['name'] ?? $gid), trim($data['slug'] ?? $gid),
+                              trim($data['genre'] ?? '') ?: null, trim($data['genre_secondary'] ?? '') ?: null,
+                              trim($data['developer'] ?? '') ?: null, trim($data['publisher'] ?? '') ?: null,
+                              $platforms, $friction, 'active']);
+
+                $db->prepare('INSERT IGNORE INTO game_aliases (alias, game_id, source, confidence) VALUES (?,?,?,?)')
+                   ->execute([strtolower(trim($data['name'] ?? $gid)), $gid, 'csv_import', 1.0]);
+                $db->prepare('INSERT IGNORE INTO game_aliases (alias, game_id, source, confidence) VALUES (?,?,?,?)')
+                   ->execute([strtolower(trim($data['slug'] ?? $gid)), $gid, 'csv_import', 1.0]);
+                $created++;
+            } catch (PDOException $e) {
+                $skipped++;
+                $errors[] = "Row {$processed} ({$gid}): " . $e->getMessage();
+            }
+        }
+
+        $db->prepare('INSERT INTO import_logs (import_id, source, records_processed, records_created, records_skipped, errors, created_at) VALUES (?,?,?,?,?,?,NOW())')
+           ->execute([$import_id, 'csv_upload', $processed, $created, $skipped, $errors ? json_encode($errors) : null]);
+
+        json_out(['import_id' => $import_id, 'source' => 'csv_upload', 'records_processed' => $processed, 'records_created' => $created, 'records_skipped' => $skipped, 'errors' => $errors]);
+
+    // GET /v1/admin/discovery-queue
+    case $method === 'GET' && $uri === '/v1/admin/discovery-queue':
+        $key = validate_api_key();
+        check_scope($key, 'admin');
+        $db = get_db();
+        $status = $_GET['status'] ?? 'pending';
+        $limit = max(1, min(200, intval($_GET['limit'] ?? 50)));
+        $stmt = $db->prepare('SELECT * FROM discovery_queue WHERE status = ? ORDER BY created_at DESC LIMIT ?');
+        $stmt->bindValue(1, $status);
+        $stmt->bindValue(2, $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        $items = $stmt->fetchAll();
+        $result = [];
+        foreach ($items as $i) {
+            $result[] = [
+                'queue_id' => $i['queue_id'], 'raw_reference' => $i['raw_reference'],
+                'suggested_game_id' => $i['suggested_game_id'], 'confidence' => (float)$i['confidence'],
+                'status' => $i['status'], 'created_at' => $i['created_at'],
+            ];
+        }
+        json_out($result);
+
+    // POST /v1/admin/discovery-queue/{id}/approve
+    case $method === 'POST' && preg_match('#^/v1/admin/discovery-queue/([a-z0-9_]+)/approve$#', $uri, $m):
+        $key = validate_api_key();
+        check_scope($key, 'admin');
+        $body = json_body();
+        $game_id = $body['game_id'] ?? $_GET['game_id'] ?? null;
+        if (!$game_id) error_out('game_id is required', 400);
+
+        $db = get_db();
+        $stmt = $db->prepare('SELECT * FROM discovery_queue WHERE queue_id = ?');
+        $stmt->execute([$m[1]]);
+        if (!$stmt->fetch()) error_out('Queue item not found', 404);
+
+        $db->prepare('UPDATE discovery_queue SET status = ?, suggested_game_id = ?, resolved_at = NOW() WHERE queue_id = ?')
+           ->execute(['approved', $game_id, $m[1]]);
+        json_out(['status' => 'approved', 'queue_id' => $m[1], 'game_id' => $game_id]);
+
+    // ===== ROOT & DEMO =====
+
+    // Root — API info
+    case $method === 'GET' && ($uri === '/' || $uri === '/api.php'):
+        json_out([
+            'service'  => 'Grip Protocol',
+            'version'  => '0.4d',
+            'layer'    => 'Trust Layer',
+            'tagline'  => 'Gaming Incident Intelligence',
+            'features' => ['API Key Auth', 'Webhook Subscriptions', 'Rate Limiting', 'HMAC Signatures', 'Confidence Scores', 'Game Registry'],
+            'endpoints' => [
+                'POST /v1/auth/register',
+                'GET  /v1/auth/me',
+                'POST /v1/auth/rotate',
+                'DELETE /v1/auth/revoke',
+                'GET  /v1/status',
+                'GET  /v1/live/hotspots',
+                'GET  /v1/signals/active',
+                'POST /v1/friction/scan',
+                'POST /v1/solve',
+                'POST /v1/device/optimize',
+                'POST /v1/events/ingest',
+                'POST /v1/dev/friction',
+                'POST /v1/webhooks',
+                'GET  /v1/webhooks',
+                'DELETE /v1/webhooks/{id}',
+                'POST /v1/webhooks/{id}/test',
+                'GET  /v1/webhooks/{id}/deliveries',
+                'POST /v1/games',
+                'GET  /v1/games',
+                'GET  /v1/games/trending',
+                'GET  /v1/games/{id}',
+                'GET  /v1/games/{id}/platforms',
+                'PATCH /v1/games/{id}',
+                'POST /v1/games/resolve',
+                'POST /v1/games/discover',
+                'POST /v1/admin/games/import/csv',
+                'GET  /v1/admin/discovery-queue',
+                'POST /v1/admin/discovery-queue/{id}/approve',
+                'GET  /health',
+            ],
+            'dashboard' => '/demo',
+        ], 200);
+
+    // 404
+    default:
+        error_out('Endpoint not found. See GET / for available routes.', 404);
+}
+
